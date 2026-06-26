@@ -120,7 +120,8 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="defs"></defs></svg>
 
 <script src="demo/data/taxa_summary.js"></script>
-<script src="demo/data/demo_mm.js"></script>
+<script src="demo/data/species_index.js"></script>
+<script src="demo/data/obs_by_taxon.js"></script>
 <script>
 /* ── 디자인 토큰(범주색) ── */
 const RL_FILL={EX:'#000000',EW:'#3D2645',RE:'#6B4E71',CR:'#D81E05',EN:'#FC7F3F',
@@ -194,9 +195,17 @@ function computeStates(D){
   return {states,cur,fresh};
 }
 
-/* ── 렌더: 대시보드(MM) ── */
-function renderDashMM(group){
-  const D=window.__DEMO_MM__; const {states,fresh}=computeStates(D);
+/* ── 분류군별 대시보드 데이터(species_index + obs_by_taxon에서 구성, 전 분류군 공통) ── */
+function dashData(group){
+  const sp=(window.__SPIDX__||[]).filter(x=>x.t===group).map(x=>({k:x.k,s:x.s,n:x.n,g:x.g,r:x.r}));
+  const O=(window.__OBS__||{})[group]||{};
+  const t=TAXA.find(x=>x.group===group)||{};
+  return {species:sp, obs:O.obs||[], generated:(window.__OBSMETA__||{}).generated||'2026',
+          taxon_kor:t.kor||group, meta:{n_records:O.n_records||0}};
+}
+/* ── 렌더: 분류군 대시보드(지역별 발견종수 막대 + 국가적색목록 도넛) ── */
+function renderDash(group){
+  const D=dashData(group); const {states,fresh}=computeStates(D);
   const recent=states.filter(s=>s.st==='recent').length;
   const dormant=states.filter(s=>s.st==='dormant').length;
   const none=states.filter(s=>s.st==='none').length;
@@ -332,17 +341,18 @@ function renderTiles(){
 function select(group){
   document.querySelectorAll('.tile').forEach(el=>el.classList.toggle('active',el.dataset.g===group));
   const t=TAXA.find(x=>x.group===group);
-  if(group==='MM'&&window.__DEMO_MM__) renderDashMM(group); else renderSoon(t);
+  if(t&&t.has_data&&(window.__OBS__||{})[group]) renderDash(group); else renderSoon(t);
   document.getElementById('dash').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ── 푸터 ── */
 function renderFoot(){
-  const D=window.__DEMO_MM__||{}; const m=D.meta||{};
-  const src=(m.sources||[]).map(s=>`${s.name}(${nf(s.records)})`).join(' · ');
+  const m=window.__OBSMETA__||{};
+  const totRec=Object.values(window.__OBS__||{}).reduce((a,d)=>a+(d.n_records||0),0);
+  const nData=TAXA.filter(t=>t.has_data).length;
   document.getElementById('foot').innerHTML=
-    `출처: ${m.citation||'국가생물종목록(KTSN)'}<br>`+
-    `포유류 데모 — 생성 ${D.generated||'-'} · 좌표계 ${m.crs||'-'} · 갱신주기 6개월 · 누적관측 ${nf(m.n_records||0)} (${src||'-'})<br>`+
+    `출처: ${m.citation||'국가생물종목록(KTSN) · EcoBank · 국립공원'}<br>`+
+    `생성 ${m.generated||'-'} · 좌표계 EPSG:4326 · 갱신주기 6개월 · 누적관측 ${nf(totRec)} · ${nData}개 분류군 데이터<br>`+
     `gap = 국가생물종목록(마스터) − 관측(동적 complement). 데이터는 정기 수집으로 갱신됩니다.`;
 }
 
@@ -359,7 +369,8 @@ function boot(){
 if(window.__TAXA__) boot();
 else Promise.all([
   fetch('demo/data/taxa_summary.json').then(r=>r.json()).then(d=>window.__TAXA__=d),
-  fetch('demo/data/demo_mm.json').then(r=>r.json()).then(d=>window.__DEMO_MM__=d).catch(()=>{})
+  fetch('demo/data/species_index.json').then(r=>r.json()).then(d=>window.__SPIDX__=d).catch(()=>{}),
+  fetch('demo/data/obs_by_taxon.json').then(r=>r.json()).then(d=>window.__OBS__=d).catch(()=>{})
 ]).then(boot).catch(()=>{document.getElementById('dash').innerHTML='<div class="soonbox"><div class="l">데이터 로딩 실패 — 로컬 서버로 여세요.</div></div>';});
 </script>
 </body>

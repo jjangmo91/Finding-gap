@@ -57,6 +57,8 @@
   table{border-collapse:collapse;width:100%;font-size:12.5px}
   th,td{padding:7px 10px;text-align:left;border-bottom:1px solid #f1f1ee;white-space:nowrap}
   th{position:sticky;top:0;background:#fbfbfa;cursor:pointer;font-size:11.5px;color:#555;user-select:none;z-index:1}
+  tbody tr.rowlink{cursor:pointer}
+  tbody tr.rowlink:hover{background:#f1f6f3}
   th:hover{color:var(--accent)}
   th .ar{font-size:10px;margin-left:3px}
   th .ar.on{color:var(--accent)}
@@ -351,7 +353,8 @@ function renderTable(){
     <th onclick="sortBy('c')" class="num" title="관측 수로 정렬">관측${ar('c')}</th></tr></thead>`;
   const shown=rows.slice(0,ROWCAP);
   const body=shown.map(x=>
-    `<tr><td>${x.n||'<span class="sci">'+x.s+'</span>'}</td><td><span class="sci">${x.s}</span></td>`+
+    `<tr class="rowlink" onclick="openSpecies('${x.k}')" title="종별 검색으로 보기 →">`+
+      `<td>${x.n||'<span class="sci">'+x.s+'</span>'}</td><td><span class="sci">${x.s}</span></td>`+
       `<td>${egBadge(x.g)}</td><td>${rlBadge(x.r)}</td><td class="num">${x.c||''}</td></tr>`
   ).join('');
   const more=rows.length>ROWCAP
@@ -456,6 +459,18 @@ function showSpecies(sp){
   if(window.innerWidth<=880) sCard.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function clearSelSpecies(){ selSpecies=null; selRegions=new Map(); sCard.innerHTML=''; refreshSpeciesMap(); }
+
+/* 분류군별 조회 테이블의 종 클릭 → 종별 검색(Mode B)으로 전환 + 해당 종 카드 표시 */
+function openSpecies(k){
+  const sp=(SP_BY_TAX[curTaxon]||[]).find(x=>x.k===k);
+  if(!sp) return;
+  setMode('B');
+  sTax=''; if(window.sTaxon){ sTaxon.value=''; }          // 전체 분류군 검색 상태로
+  fillSearchYears();                                       // sy0/sy1 채움(showSpecies가 사용)
+  if(window.q){ q.value=sp.n||sp.s; doSearch(); }          // 검색창·결과 목록도 동기화
+  showSpecies(sp);
+  if(window.sCard) sCard.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 /* ── 모드 전환 ── */
 function setMode(m){
