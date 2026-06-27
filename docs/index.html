@@ -73,6 +73,11 @@
   .bar .track i{height:100%}
   .bar .bn{font-size:12px;font-variant-numeric:tabular-nums;text-align:right;color:#444;font-weight:600}
   .bar .go{font-size:10px;color:var(--faint);margin-left:4px}
+  /* 전국 발견/미발견 2막대 */
+  .bar.bar2{grid-template-columns:64px 1fr 66px;padding:4px 4px}
+  .bar.bar2 .bl{font-size:13px;font-weight:600;color:#2a2f2c}
+  .bar.bar2 .track{height:22px}
+  .bar.bar2 .bn{font-size:14px}
   /* encoding legend */
   .enc{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 2px;padding:9px 12px;background:#f7f8f6;
     border:1px solid #ecefe9;border-radius:8px;font-size:12px;color:#4a4f4c}
@@ -221,29 +226,19 @@ function renderDash(group){
     `<pattern id="h_${c}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`+
     `<rect width="5" height="5" fill="#fff"/><line x1="0" y1="0" x2="0" y2="5" stroke="${RL_FILL[c]}" stroke-width="2.4"/></pattern>`).join('');
 
-  // 지역 막대(시도별 발견 종수, 범주 스택, 미상 제외)
-  const spCat=new Map(D.species.map(sp=>[sp.k, normCat(sp.r)||'BLANK']));
-  const sidoSp={};
-  for(const o of D.obs){ const s=o[1]; if(s==='미상')continue; (sidoSp[s]=sidoSp[s]||new Set()).add(o[0]); }
-  const rows=Object.entries(sidoSp).map(([s,set])=>{
-    const cc={}; set.forEach(k=>{const c=spCat.get(k)||'BLANK'; cc[c]=(cc[c]||0)+1;});
-    return {sido:s,total:set.size,cc};
-  }).sort((a,b)=>b.total-a.total);
-  const maxTot=Math.max(1,...rows.map(r=>r.total));
-  const stackCats=STACK_ORDER.filter(c=>rows.some(r=>r.cc[c]));
-
-  const barHTML=rows.map(r=>{
-    const segs=STACK_ORDER.filter(c=>r.cc[c]).map(c=>{
-      const col=c==='BLANK'?BLANK_COLOR:RL_FILL[c]; const lab=c==='BLANK'?'미분류':CODE_DISP(c);
-      return `<i style="width:${(r.cc[c]/maxTot*100).toFixed(2)}%;background:${col}" title="${lab} ${r.cc[c]}종"></i>`;
-    }).join('');
-    const url=`service.html?taxon=${group}&sido=${encodeURIComponent(r.sido)}`;
-    return `<div class="bar" onclick="location.href='${url}'" title="${r.sido} 상세 조회로 이동">`+
-      `<span class="bl">${r.sido}</span><span class="track">${segs}</span>`+
-      `<span class="bn">${r.total}</span></div>`;
-  }).join('');
-  const stackLeg=stackCats.map(c=>{const col=c==='BLANK'?BLANK_COLOR:RL_FILL[c]; const lab=c==='BLANK'?'미분류':`${CODE_DISP(c)} ${RL_KOR[c]}`;
-    return `<span><i class="sw" style="background:${col}"></i>${lab}</span>`;}).join('');
+  // 전국 발견/미발견 2막대(종수, 클릭 시 지도 서비스로 이동)
+  const maxBar=Math.max(1,observed,none);
+  const mapUrl=`service.html?taxon=${group}`;
+  const barRows=[
+    {lab:'발견',   n:observed, col:'var(--accent)'},
+    {lab:'미발견', n:none,     col:'#b8541f'}
+  ];
+  const barHTML=barRows.map(r=>
+    `<div class="bar bar2" onclick="location.href='${mapUrl}'" title="${D.taxon_kor} 지도 서비스로 이동 →">`+
+      `<span class="bl">${r.lab}</span>`+
+      `<span class="track"><i style="width:${(r.n/maxBar*100).toFixed(2)}%;background:${r.col}"></i></span>`+
+      `<span class="bn">${nf(r.n)}</span></div>`
+  ).join('');
 
   // 도넛 small-multiples
   const donutHTML=present.map(c=>{const d=cat[c],t=d.recent+d.dormant+d.none, fill=RL_FILL[c], outline=LIGHT.has(c)?RL_FG[c]:fill;
@@ -273,10 +268,9 @@ function renderDash(group){
   </div>
 
   <div class="panel">
-    <h3>지역별 발견 종 수 <button class="q" data-h="h1">?</button></h3>
-    <div class="help" id="h1" hidden>각 시도에서 한 번이라도 관측된 종 수입니다. 막대 색은 국가적색목록 범주이며, 적색목록에 범주가 지정되지 않은 종은 ‘미분류’(회색)입니다. 막대를 누르면 해당 지역 상세 조회로 이동합니다. 좌표가 행정구역 밖이라 시도를 특정할 수 없는 관측(미상)은 제외했습니다.</div>
+    <h3>전국 발견 현황 <button class="q" data-h="h1">?</button></h3>
+    <div class="help" id="h1" hidden>국가생물종목록 대상 종 중, 국내 조사자료에서 한 번이라도 관측된 종(<b>발견</b>)과 관측 기록이 전혀 없는 종(<b>미발견 = 발견공백</b>)의 전국 종 수입니다. 막대를 누르면 지도 서비스에서 지역·시기·국가적색목록으로 조회할 수 있습니다.</div>
     <div class="bars">${barHTML}</div>
-    <div class="stack-leg">${stackLeg}</div>
   </div>
 
   <div class="panel">
