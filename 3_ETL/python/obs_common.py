@@ -95,3 +95,22 @@ def sido_lookup(uniq_coords, shp=SIDO_SHP):
     for i, sd in zip(joined["i"], joined["sido"]):
         coord_sido.setdefault(uniq_coords[i], sd if isinstance(sd, str) else "미상")
     return coord_sido
+
+
+def write_points(out_path, grp):
+    """좌표 보존 점 단위 기본 DB의 기반 — 집계용 grp{(ktsn,taxon_group,sido,year,source): set((lon,lat))}
+    를 고유 좌표 1개당 1행으로 펼쳐 CSV(ktsn,taxon_group,source,year,sido,lon,lat)로 쓴다.
+    이 점들을 (ktsn,taxon_group,sido,year,source)로 세면 obs_count 와 정확히 동일 → 시도 집계가 점 DB에서 파생된다.
+    무좌표(lon=None)는 lon/lat 빈칸으로 보존(미상 시도). 반환: 기록 행 수."""
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with out_path.open("w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["ktsn", "taxon_group", "source", "year", "sido", "lon", "lat"])
+        for (ktsn, tx, sido, year, src), coords in grp.items():
+            for (lon, lat) in coords:
+                w.writerow([ktsn, tx, src, year, sido,
+                            "" if lon is None else lon, "" if lat is None else lat])
+                n += 1
+    return n

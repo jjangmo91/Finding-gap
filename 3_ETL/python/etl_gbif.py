@@ -15,7 +15,7 @@ import sys, csv, re, time
 from pathlib import Path
 from collections import defaultdict, Counter
 
-from obs_common import load_master, resolve_ktsn, sido_lookup   # 마스터+별칭·충돌판정(override 최우선)·시도조인
+from obs_common import load_master, resolve_ktsn, sido_lookup, write_points   # 마스터+별칭·충돌판정(override 최우선)·시도조인·점DB
 from name_overrides import load_overrides
 
 csv.field_size_limit(10**7)
@@ -121,6 +121,10 @@ def main():
         w = csv.DictWriter(f, fieldnames=["ktsn", "taxon_group", "sido", "year", "source", "obs_count"])
         w.writeheader(); w.writerows(rows)
     print(f"집계: observation_gbif 행 {len(rows):,}  ({time.time()-t3:.1f}s) → {OUT.name}")
+
+    # 좌표 보존 점 단위 기본 DB(파생: 위 시도 집계와 카운트 일치) — bioclim 등 점 기반 분석용
+    npt = write_points(PROC / "observation_points_gbif.csv", grp)
+    print(f"점 DB: observation_points_gbif.csv 행 {npt:,}")
 
     # 리포트
     tx_sp = {}

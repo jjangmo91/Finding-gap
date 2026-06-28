@@ -17,7 +17,7 @@ from pathlib import Path
 from collections import defaultdict, Counter
 from taxon_key import managed_key
 from name_overrides import load_overrides
-from obs_common import load_master, resolve_ktsn, _kor, sido_lookup
+from obs_common import load_master, resolve_ktsn, _kor, sido_lookup, write_points
 
 BASE = Path(__file__).resolve().parents[2]
 PROC = BASE / "1_Data" / "processed"
@@ -199,6 +199,10 @@ def main():
         w.writeheader()
         w.writerows(rows)
     print(f"집계: observation_nps 행 {len(rows):,}  ({time.time()-t3:.1f}s) → {OUT.name}")
+
+    # 좌표 보존 점 단위 기본 DB(파생: 위 시도 집계와 카운트 일치) — bioclim 등 점 기반 분석용
+    npt = write_points(PROC / "observation_points_nps.csv", grp)
+    print(f"점 DB: observation_points_nps.csv 행 {npt:,}")
 
     # 5) 리포트 생성
     yr_list = sorted({r["year"] for r in rows if r["year"]})

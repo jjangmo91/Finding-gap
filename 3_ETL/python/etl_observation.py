@@ -14,7 +14,7 @@ import sys, csv, json, time, re
 from pathlib import Path
 from collections import defaultdict, Counter
 from name_overrides import load_overrides
-from obs_common import load_master, resolve_ktsn, _kor, sido_lookup
+from obs_common import load_master, resolve_ktsn, _kor, sido_lookup, write_points
 import fetch_ecobank as fe
 
 BASE = Path(__file__).resolve().parents[2]
@@ -105,6 +105,10 @@ def main():
         w = csv.DictWriter(f, fieldnames=["ktsn", "taxon_group", "sido", "year", "source", "obs_count"])
         w.writeheader(); w.writerows(rows)
     print(f"집계: observation_agg 행 {len(rows):,}  ({time.time()-t3:.1f}s) → {OUT.name}")
+
+    # 좌표 보존 점 단위 기본 DB(파생: 위 시도 집계와 카운트 일치) — bioclim 등 점 기반 분석용
+    npt = write_points(PROC / "observation_points_ecobank.csv", grp)
+    print(f"점 DB: observation_points_ecobank.csv 행 {npt:,}")
 
     # 4) 리포트
     yr = sorted({r["year"] for r in rows if r["year"]})
