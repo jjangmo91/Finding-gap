@@ -15,16 +15,14 @@ import sys, csv, re, time
 from pathlib import Path
 from collections import defaultdict, Counter
 
-from etl_national_park import load_master, resolve_ktsn   # 마스터+별칭, 충돌판정(override 최우선)
+from obs_common import load_master, resolve_ktsn, sido_lookup   # 마스터+별칭·충돌판정(override 최우선)·시도조인
 from name_overrides import load_overrides
-from taxon_key import managed_key
 
 csv.field_size_limit(10**7)
 
 BASE = Path(__file__).resolve().parents[2]
 PROC = BASE / "1_Data" / "processed"
 GBIF_RAW = BASE / "1_Data" / "raw" / "gbif"
-SIDO_SHP = BASE / "1_Data" / "spatial" / "BND_SIDO_PG" / "BND_SIDO_PG.shp"
 OUT = PROC / "observation_gbif.csv"
 REPORT = PROC / "observation_gbif_report.txt"
 
@@ -100,23 +98,10 @@ def main():
           f"[보정 {n_override:,} · 학명 {n_sci:,}] | 미매칭 {n_none:,} · 무좌표 {n_nocoord:,} · 타분류군매칭 {n_taxon_mismatch:,}  ({time.time()-t0:.1f}s)")
 
     # 시도 spatial join (고유 좌표만)
-    import geopandas as gpd
-    from shapely.geometry import Point
     t2 = time.time()
     uniq_list = sorted(uniq)
     n_coords = len(uniq_list)
-    sido_gdf = gpd.read_file(SIDO_SHP)
-    name_col = next((c for c in sido_gdf.columns
-                     if c.upper() in ("CTP_KOR_NM", "SIDO_NM", "CTPRVN_NM", "SIDONM")), None)
-    if name_col is None:
-        name_col = next(c for c in sido_gdf.columns if sido_gdf[c].dtype == object and c != "geometry")
-    sido_gdf = sido_gdf.to_crs(4326)[[name_col, "geometry"]].rename(columns={name_col: "sido"})
-    pts = gpd.GeoDataFrame({"i": range(n_coords)},
-                           geometry=[Point(lo, la) for lo, la in uniq_list], crs=4326)
-    joined = gpd.sjoin(pts, sido_gdf, how="left", predicate="within")
-    coord_sido = {}
-    for i, sd in zip(joined["i"], joined["sido"]):
-        coord_sido.setdefault(uniq_list[i], sd if isinstance(sd, str) else "미상")
+    coord_sido = sido_lookup(uniq_list)
     n_unknown = sum(1 for v in coord_sido.values() if v == "미상")
     print(f"시도조인: 고유좌표 {n_coords:,} | 시도밖(미상) {n_unknown:,}  ({time.time()-t2:.1f}s)")
 

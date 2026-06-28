@@ -16,67 +16,14 @@ import sys, csv, json, time, re, zipfile
 from pathlib import Path
 from collections import defaultdict, Counter
 from taxon_key import managed_key
-from name_overrides import load_overrides, load_aliases
+from name_overrides import load_overrides
+from obs_common import load_master, resolve_ktsn, _kor, sido_lookup
 
 BASE = Path(__file__).resolve().parents[2]
 PROC = BASE / "1_Data" / "processed"
-MASTER = PROC / "ktsn_master.csv"
 RAW_NP = BASE / "1_Data" / "raw" / "national_park"
-SIDO_SHP = BASE / "1_Data" / "spatial" / "BND_SIDO_PG" / "BND_SIDO_PG.shp"
 OUT = PROC / "observation_nps.csv"
 REPORT = PROC / "observation_nps_report.txt"
-
-
-def _kor(s):
-    """정규화: 공백 제거"""
-    return re.sub(r"\s+", "", s or "")
-
-
-def load_master():
-    """ktsn_master → (학명키→ktsn, 국명→ktsn, ktsn→taxon_group). 변종/품종 별칭(alias)을 gap-fill."""
-    sci, kor, tx = {}, {}, {}
-    for r in csv.DictReader(MASTER.open(encoding="utf-8-sig")):
-        k = r["ktsn"]
-        mk = (r.get("match_key") or "").strip()
-        if mk and mk not in sci:
-            sci[mk] = k
-        kn = _kor(r.get("korean_name"))
-        if kn and kn not in kor:
-            kor[kn] = k
-        tx[k] = r.get("taxon_group") or ""
-    # 별칭 흡수(정명 우선 — 이미 있는 키는 덮어쓰지 않음)
-    al_sci, al_kor = load_aliases()
-    for k2, v in al_sci.items():
-        sci.setdefault(k2, v)
-    for k2, v in al_kor.items():
-        kor.setdefault(k2, v)
-    return sci, kor, tx
-
-
-def resolve_ktsn(sci, kor, sciname, kor_name, ov_sci=None, ov_kor=None):
-    """학명·국명을 각각 ktsn으로 해석한 뒤 충돌 판정(확정불가 폐기). 보정 매핑(override)이 최우선.
-    반환: (ktsn|None, how) — how ∈ {'override','both','sci','kor','conflict','none'}.
-      override : 보정 매핑에 등록된 이름(정명 재배치·종분할) → 지정 ktsn으로 확정(충돌보다 우선)
-      both     : 학명·국명이 같은 ktsn → 매칭(가장 신뢰)
-      sci/kor  : 한쪽만 해석됨 → 그것으로 매칭
-      conflict : 둘 다 해석되나 서로 다른 ktsn → 확정불가 → 폐기
-      none     : 둘 다 미해석 → 미매칭
-    """
-    if ov_sci or ov_kor:
-        ovk = (ov_sci or {}).get(managed_key(sciname)) if sciname else None
-        if not ovk and kor_name:
-            ovk = (ov_kor or {}).get(_kor(kor_name))
-        if ovk:
-            return ovk, "override"
-    ks = sci.get(managed_key(sciname)) if sciname else None
-    kk = kor.get(_kor(kor_name)) if kor_name else None
-    if ks and kk:
-        return (ks, "both") if ks == kk else (None, "conflict")
-    if ks:
-        return ks, "sci"
-    if kk:
-        return kk, "kor"
-    return None, "none"
 
 
 def parse_date(date_str):
@@ -229,25 +176,10 @@ def main():
           f"폐기 {n_discard:,} (충돌 {n_conflict:,} · 미매칭 {n_discard-n_conflict:,})  ({time.time()-t1:.1f}s)")
 
     # 3) 시도 spatial join (고유 좌표만)
-    import geopandas as gpd
-    from shapely.geometry import Point
     t2 = time.time()
     uniq = sorted({(o[3], o[4]) for o in obs if o[3] is not None})
     n_coords = len(uniq)
-
-    sido_gdf = gpd.read_file(SIDO_SHP)
-    name_col = next((c for c in sido_gdf.columns
-                     if c.upper() in ("CTP_KOR_NM", "SIDO_NM", "CTPRVN_NM", "SIDONM")), None)
-    if name_col is None:
-        name_col = next(c for c in sido_gdf.columns if sido_gdf[c].dtype == object and c != "geometry")
-    sido_gdf = sido_gdf.to_crs(4326)[[name_col, "geometry"]].rename(columns={name_col: "sido"})
-
-    pts = gpd.GeoDataFrame({"i": range(len(uniq))},
-                           geometry=[Point(lo, la) for lo, la in uniq], crs=4326)
-    joined = gpd.sjoin(pts, sido_gdf, how="left", predicate="within")
-    coord_sido = {}
-    for i, sd in zip(joined["i"], joined["sido"]):
-        coord_sido.setdefault(uniq[i], sd if isinstance(sd, str) else "미상")
+    coord_sido = sido_lookup(uniq)
     n_unknown = sum(1 for v in coord_sido.values() if v == "미상")
     print(f"시도조인: 고유좌표 {n_coords:,} | 시도밖(미상) {n_unknown:,}  ({time.time()-t2:.1f}s)")
 
