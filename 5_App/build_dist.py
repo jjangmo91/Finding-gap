@@ -19,7 +19,7 @@ DIST = BASE / "6_Deliverables" / "dist"
 DATA = APP / "demo" / "data"
 
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
-PAGES = ["index.html", "service.html"]
+PAGES = ["index.html", "service.html", "fg_supabase.js"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
               "species_index.js", "species_state.js", "sido.geojson"]
 # 분류군별 관측은 분할 산출 — obs_meta.js + obs_<T>.js 전부 복사(서비스가 지연 로드)
@@ -39,11 +39,11 @@ HEADERS = """\
 """
 
 
-def vworld_key():
+def env_val(name):
     env = APP / ".env"
     if not env.exists():
         return ""
-    m = re.search(r"^\s*VWORLD_KEY\s*=\s*(.+?)\s*$", env.read_text(encoding="utf-8"), re.M)
+    m = re.search(rf"^\s*{name}\s*=\s*(.+?)\s*$", env.read_text(encoding="utf-8"), re.M)
     return m.group(1).strip().strip('"').strip("'") if m else ""
 
 
@@ -76,15 +76,22 @@ def main():
         if not hit:
             print(f"(경고) 글롭 누락: {pat}")
 
-    osm_only = "--osm-only" in sys.argv[1:]
-    key = "" if osm_only else vworld_key()
-    (DIST / "config.js").write_text(f'window.VWORLD_KEY = "{key}";\n', encoding="utf-8")
+    osm_only = "--osm-only" in args
+    no_supabase = "--no-supabase" in args              # docs(public) 에서 Supabase 키 제외하고 싶을 때
+    key = "" if osm_only else env_val("VWORLD_KEY")
+    sb_url = "" if no_supabase else env_val("SUPABASE_URL")
+    sb_key = "" if no_supabase else env_val("SUPABASE_KEY")   # publishable 키(공개 전제·RLS 보호)
+    (DIST / "config.js").write_text(
+        f'window.VWORLD_KEY = "{key}";\n'
+        f'window.SUPABASE_URL = "{sb_url}";\n'
+        f'window.SUPABASE_KEY = "{sb_key}";\n', encoding="utf-8")
     (DIST / "_headers").write_text(HEADERS, encoding="utf-8")
 
     total = sum(p.stat().st_size for p in DIST.rglob("*") if p.is_file())
     print(f"dist 조립 완료 → {DIST.relative_to(BASE)}")
     print(f"  파일 {sum(1 for _ in DIST.rglob('*') if _.is_file())}개 · 총 {total/1_048_576:.1f} MB")
     print(f"  배경지도: {'OSM 전용(vworld 키 미포함)' if osm_only else ('vworld+OSM 폴백' if key else 'OSM(키 없음)')}")
+    print(f"  Supabase: {'포함(publishable 키, RLS 보호)' if sb_url and sb_key else '미포함'}")
     print("  배포: npx wrangler pages deploy 6_Deliverables/dist --project-name finding-gap")
 
 
