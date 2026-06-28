@@ -165,6 +165,12 @@
   <footer id="foot"></footer>
 </div>
 
+<style>
+  .watchbtn{appearance:none;border:1px solid #e7e7e2;background:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:#5a5f5c;white-space:nowrap}
+  .watchbtn.on{background:#fff7e6;border-color:#f0d9a0;color:#9a7b2e}
+  .watchbtn:hover{border-color:#cfcfc7}
+  .watchbtn:disabled{opacity:.6;cursor:default}
+</style>
 <script src="config.js" onerror="window.VWORLD_KEY=window.VWORLD_KEY||''"></script>
 <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
 <script src="demo/data/taxa_summary.js"></script>
@@ -475,7 +481,10 @@ function renderSpecies(sp){
     ? `<a class="lk danger" href="${NATURING}" target="_blank" rel="noopener noreferrer"><span><span class="t">Naturing 멸종위기종 제보</span><br><span class="d">시민과학 관찰 제보 프로젝트 →</span></span></a>`
     : `<a class="lk" href="${ECOBANK}" target="_blank" rel="noopener noreferrer"><span><span class="t">EcoBank 데이터 제보</span><br><span class="d">국립생태원 생태정보 제보 →</span></span></a>`;
   sCard.innerHTML=`<div class="scard">
-    <h3>${sp.n||sp.s}</h3><div class="sci">${sp.s}</div>
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="min-width:0"><h3>${sp.n||sp.s}</h3><div class="sci">${sp.s}</div></div>
+      <button class="watchbtn" data-k="${sp.k}" style="margin-left:auto" hidden>☆ 관심 종</button>
+    </div>
     <div style="margin-top:8px">${badges(sp.g,sp.r)||'<span class="muted">일반종</span>'} <span class="badge" style="background:#eef3f1;color:#2f6f5e">${TAXON_KOR[sp.t]||sp.t}</span></div>
     <div class="row"><div class="k">발견 지역(시도) · ${sy0}–${sy1}</div>${regHtml}</div>
     <div class="row"><div class="k">상세 정보 · 데이터 제보</div>
@@ -487,6 +496,7 @@ function renderSpecies(sp){
     </div>
   </div>`;
   refreshSpeciesMap();
+  if(window.fgWatch) window.fgWatch.decorate(sp.k);     // 관심 종 ☆ 버튼(로그인 시 활성)
   if(window.innerWidth<=880) sCard.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function clearSelSpecies(){ selSpecies=null; selRegions=new Map(); sCard.innerHTML=''; refreshSpeciesMap(); }
@@ -548,8 +558,40 @@ function boot(){
   foot.innerHTML=`배경지도 © VWorld / © OpenStreetMap 기여자 · 종 상세 © 국립생물자원관 한반도의 생물다양성 · 출처 ${OMETA.citation||'KTSN·EcoBank·국립공원'}<br>`+
     `${TAXA.length}개 분류군 · 생성 ${OMETA.generated||'-'} · 종 검색 ${nf(SPIDX.length)}종 · 갱신주기 ${OMETA.update_cycle==='6mo'?'6개월':(OMETA.update_cycle||'6개월')}. 발견공백 = 국가생물종목록 − 관측(동적).`;
   if(p.get('taxon')||p.get('sido')) setMode('A');
+  // 딥링크 ?sp=<ktsn> — 마이데이터 관심 종에서 진입(모드 B로 해당 종 카드 열기)
+  const spk=p.get('sp');
+  if(spk){ const sp=SPIDX.find(x=>x.k===spk);
+    if(sp){ setMode('B'); if(window.sTaxon){sTaxon.value='';sTax='';} if(window.q){q.value=sp.n||sp.s; doSearch();} showSpecies(sp); } }
 }
 boot();
+</script>
+
+<!-- 관심 종(watchlist) — Supabase 설정이 있을 때만 종 카드에 ☆ 버튼 활성 -->
+<script type="module">
+import { configured, onAuth, getUser, watchList, watchAdd, watchRemove } from './fg_supabase.js';
+let user=null; const W=new Set();
+function decorate(ktsn){
+  const b=document.querySelector('.watchbtn[data-k="'+(window.CSS&&CSS.escape?CSS.escape(ktsn):ktsn)+'"]');
+  if(!b) return;
+  if(!configured){ b.hidden=true; return; }
+  b.hidden=false;
+  const on=W.has(ktsn);
+  b.textContent = user ? (on?'★ 관심 종':'☆ 관심 종 추가') : '☆ 관심 종';
+  b.classList.toggle('on', on);
+  b.onclick=async()=>{
+    if(!user){ location.href='index.html#my'; return; }       // 로그인 필요 → 마이데이터
+    b.disabled=true;
+    try{ if(W.has(ktsn)){ await watchRemove(ktsn); W.delete(ktsn); } else { await watchAdd(ktsn); W.add(ktsn); } }
+    catch(e){ console.warn('관심 종 토글 실패', e); }
+    b.disabled=false; decorate(ktsn);
+  };
+}
+function refresh(){ const b=document.querySelector('.watchbtn'); if(b) decorate(b.dataset.k); }
+window.fgWatch={ configured, decorate };
+if(configured) onAuth(u=>{ user=u; W.clear();
+  if(user) watchList().then(ks=>{ks.forEach(k=>W.add(k)); refresh();}).catch(refresh);
+  else refresh();
+});
 </script>
 </body>
 </html>
