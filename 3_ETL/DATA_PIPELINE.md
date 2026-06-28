@@ -1,7 +1,7 @@
 # Finding gap — 데이터 파이프라인 구조
 
 > 원자료(raw) → 정제자료(processed) → 서비스 테이블(5_App/demo/data) 3계층.
-> 마지막 갱신: 2026-06-28 (GBIF 9분류군 적재·3원 관측 union·서비스 obs 분류군별 분할·ETL 공통모듈 obs_common 반영).
+> 마지막 갱신: 2026-06-28 (GBIF 9분류군 적재·3원 관측 union·서비스 obs 분류군별 분할·ETL 공통모듈 obs_common·**좌표 보존 점 DB observations.sqlite + 종별 bioclim** 반영).
 > 관측 행 수는 GBIF·EcoBank 전량 적재 후 재빌드 시 갱신(아래 일부는 직전 빌드 기준).
 
 ```
@@ -96,6 +96,18 @@
 - **union**: `build_demo_data.union_obs()`가 agg(EcoBank)+nps(국립공원)+**gbif** 3원 합류(코드 반영). `improve_species_list`도 관측원에 gbif 포함.
 - ⚠ **geopandas 필요** → anaconda python(`C:\Users\yssfr\anaconda3\python.exe`)으로 실행(Windows Store python엔 geopandas 없음). EcoBank/국립공원 ETL도 동일.
 
+### 1-G. 관측 점 단위 기본 DB — `observations.sqlite` (table `obs_points`, 5,378,653행) *(gitignore)*
+- **생성**: 각 관측 ETL이 부산물로 `observation_points_<source>.csv`(ecobank/gbif/nps) 산출(`obs_common.write_points` — 집계용 grp를 고유 좌표 1개당 1행으로 펼침) → `build_points_db.py` 가 3원 union → SQLite 적재.
+- **스키마**: `ktsn, taxon_group, source, year, sido, lon, lat` (좌표 EPSG:4326. 좌표 없는 관측은 lon/lat NULL·sido 미상으로 보존). 인덱스: ktsn · taxon_group · (lon,lat).
+- **역할**: 좌표를 보존한 **단일 원천**. 서빙용 시도 집계(`observation_*.csv`)는 이 점들을 (ktsn,taxon_group,sido,year,source)로 세면 obs_count와 **정확히 동일** → 집계가 점 DB에서 파생됨(build_points_db가 3원 모두 `일치 True` 검증; 집계 CSV는 byte-identical 유지). bioclim 등 점 기반 분석의 기반.
+- 점 합계: ecobank 2,739,966 · gbif 2,216,544 · nps 422,143.
+
+### 1-H. 종별 bioclim 분포 — `species_bioclim.csv` *(gitignore)*
+- **생성**: `R/bioclim_points.R` ← obs_points 좌표 + WorldClim 계열 `bio01~19.tif`(EPSG:5186·30m, `D:/Google_Drive/Paper/Lucanidae/Data/Zonal/bioclim`).
+- **방법**: 고유 좌표(약 1.41M) 1회 추출(4326→5186 투영) → 관측을 좌표 id로 매핑 → 종별×bio **5수치(min·Q1·median·Q3·max)+평균+n**. *표시 방식(박스플롯 등)은 별도 — 데이터만 산출.*
+- **스키마**: `ktsn, taxon_group, bio, n, min, q1, median, q3, max, mean`. 좌표 보유 20,275종 중 래스터 범위 내 약 17,948종 집계.
+- ⚠ Rscript는 **공백 포함 경로의 스크립트 파일 직접 실행 실패**(exit 127) → `Rscript --vanilla -e "source('…/bioclim_points.R')"` 로 실행.
+
 ---
 
 ## 2. 서비스 테이블 — `5_App/demo/data/` (정적 .js + .json)
@@ -131,6 +143,8 @@ Rscript ../R/gbif_01_all.R import           # → 1_Data/raw/gbif/gbif_<group>.c
 python etl_observation.py <ecobank ndjson…> # → observation_agg.csv  (override+alias 적용)
 python etl_national_park.py                 # → observation_nps.csv (+unmatched)
 python etl_gbif.py                          # → observation_gbif.csv (학명매칭·매칭ktsn 분류군 기준)
+python build_points_db.py                   # → observations.sqlite (obs_points; 점 DB + 시도집계 동일 파생 검증)
+Rscript --vanilla -e "source('../R/bioclim_points.R')"  # → species_bioclim.csv (종별 bio01~19 분포; 공백경로라 source 사용)
 python reconcile_unmatched.py               # → observation_nps_unmatched_candidates.csv (검토용)
 python improve_species_list.py              # → species_service_flags.csv
 python build_demo_data.py 2026-06-28        # → 5_App/demo/data/*.js (+.json)
