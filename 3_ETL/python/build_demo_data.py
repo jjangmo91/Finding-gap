@@ -20,12 +20,15 @@ PROC = BASE / "1_Data" / "processed"
 MASTER = PROC / "ktsn_master.csv"
 AGG = PROC / "observation_agg.csv"
 AGG_NPS = PROC / "observation_nps.csv"               # 국립공원 ETL(다분류군) — 있으면 union
+AGG_GBIF = PROC / "observation_gbif.csv"             # GBIF 점유자료 ETL(다분류군) — 있으면 union
 FLAGS = PROC / "species_service_flags.csv"           # 서비스 제외 종(해양포유류·무기록 어류)
 OUTDIR = BASE / "5_App" / "demo" / "data"
 OUT = OUTDIR / "demo_mm.json"
 TAXON = "MM"
 TAXON_KOR = "포유류"
 GENERATED = sys.argv[1] if len(sys.argv) > 1 else ""   # 'YYYY-MM-DD' 주입(스크립트는 날짜 미생성)
+YMAX = int(GENERATED[:4]) if GENERATED[:4].isdigit() else 2026   # 비정상 연도(미래/오류) 상한
+YMIN = 1900
 
 TAXON_ORDER = ["MM", "AV", "RP", "AM", "-P", "UC", "CC", "IV", "IN", "VP", "MS"]
 CITATION = "국립생태원 EcoBank 조사자료 · 국립공원공단 생물자원현황 · 국립생물자원관 국가생물종목록(KTSN)"
@@ -42,9 +45,9 @@ def load_excluded():
 
 
 def union_obs():
-    """observation_agg(EcoBank) + observation_nps(국립공원) → [(ktsn,taxon,sido,year,source,count)]."""
+    """observation_agg(EcoBank) + observation_nps(국립공원) + observation_gbif(GBIF) → [(ktsn,taxon,sido,year,source,count)]."""
     rows = []
-    for p in (AGG, AGG_NPS):
+    for p in (AGG, AGG_NPS, AGG_GBIF):
         if not p.exists():
             continue
         for r in csv.DictReader(p.open(encoding="utf-8-sig")):
@@ -52,8 +55,15 @@ def union_obs():
                 c = int(r["obs_count"])
             except (KeyError, ValueError):
                 continue
+            y = r.get("year") or ""
+            if y:                                     # 비정상 연도(예 4225)는 미상으로 — 관측(발견)은 유지
+                try:
+                    if not (YMIN <= int(y) <= YMAX):
+                        y = ""
+                except ValueError:
+                    y = ""
             rows.append((r["ktsn"], r.get("taxon_group") or "", r["sido"],
-                         r.get("year") or "", r.get("source") or "", c))
+                         y, r.get("source") or "", c))
     return rows
 
 
@@ -201,6 +211,25 @@ def build_obs_by_taxon(excl=frozenset(), obs_rows=None):
               f"기록 {d['n_records']} · source {d['sources']}")
 
 
+def build_species_state(excl=frozenset(), obs_rows=None):
+    """대문 대시보드 경량 요약: 관측종 → 최신 관측연도(maxYear). 대문이 대용량 obs_by_taxon 대신 이걸 로드.
+    window.__SPSTATE__={generated, maxyear:{ktsn:year}} — 미수록 종 = 미발견. year=0 = 관측되었으나 연도 미상(=휴면 처리).
+    종의 분류군·적색범주는 species_index(__SPIDX__)에서, 분류군 누적관측은 taxa_summary(__TAXA__)에서 가져온다."""
+    rows = obs_rows if obs_rows is not None else union_obs()
+    maxy = {}
+    for k, t, sido, year, src, c in rows:
+        if not t or k in excl:
+            continue
+        y = int(year) if year else 0
+        if k not in maxy or y > maxy[k]:
+            maxy[k] = y
+    meta = {"generated": GENERATED, "maxyear": maxy}
+    payload = json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
+    (OUTDIR / "species_state.json").write_text(payload, encoding="utf-8")
+    (OUTDIR / "species_state.js").write_text("window.__SPSTATE__=" + payload + ";", encoding="utf-8")
+    print(f"→ species_state.json (관측종 {len(maxy)} · maxYear 요약 · 대문 경량화용)")
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     excl = load_excluded()
@@ -209,6 +238,7 @@ def main():
     build_mm(excl, rows)
     build_taxa_summary(excl, rows)
     build_species_index(excl)
+    build_species_state(excl, rows)
     build_obs_by_taxon(excl, rows)
 
 

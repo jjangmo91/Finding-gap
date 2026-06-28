@@ -1,15 +1,15 @@
 # Finding gap — 데이터 파이프라인 구조
 
 > 원자료(raw) → 정제자료(processed) → 서비스 테이블(5_App/demo/data) 3계층.
-> 마지막 갱신: 2026-06-20 (매칭 충돌규칙·UC 제외·GBIF order 폴백 반영 기준).
-> 행 수는 2026-06-20 빌드 기준 실측값.
+> 마지막 갱신: 2026-06-28 (GBIF 9분류군 적재·3원 관측 union 반영).
+> 관측 행 수는 GBIF·EcoBank 전량 적재 후 재빌드 시 갱신(아래 일부는 직전 빌드 기준).
 
 ```
 ┌─ 0. 원자료 raw ──────────────┐   ┌─ 1. 정제자료 processed ──────────┐   ┌─ 2. 서비스 테이블 ────────┐
 │ NIBR KTSN  ndjson (10분류군)  │→ │ ktsn_master.csv        40,156     │→ │ taxa_summary.js   9그룹    │
-│ EcoBank    ndjson (WFS 레이어)│→ │ observation_agg.csv     5,049     │→ │ obs_by_taxon.js   분류군별 │
+│ EcoBank    ndjson (WFS 레이어)│→ │ observation_agg.csv  (재빌드시)   │→ │ obs_by_taxon.js   분류군별 │
 │ 국립공원   CSV+ZIP×22         │→ │ observation_nps.csv    91,267     │→ │ species_index.js  39,972   │
-│ GBIF       (예정)             │→ │ observation_gbif.csv   (예정)     │→ │ demo_mm.js        MM상세   │
+│ GBIF       csv (9분류군)      │→ │ observation_gbif.csv  (etl_gbif)  │→ │ demo_mm.js        MM상세   │
 │ 멸종위기   xlsx               │→ │ endangered_species.csv    282     │   └───────────────────────────┘
 │ 국가적색목록 PDF→txt          │→ │ national_redlist.csv    5,445     │     build_demo_data.py 가 생성
 │ 해양생물 MBRIS API            │→ │ species_service_flags.csv 40,156  │     (서비스 제외종 필터 + 관측 union)
@@ -87,8 +87,13 @@
   | 그 외 | — | (유지) |
 - 2026-06-20: 서비스 39,972 / 제외 184(marine_mammal 42 + tunicate_marine 142).
 
-### 1-F. (예정) `observation_gbif.csv`
-- GBIF R 다운로드(`R/gbif_00_download.R`) → Python 어댑터가 관측 스키마로 흡수. 적재되면 `improve_species_list`·`build_demo_data`가 자동 union(코드 이미 반영).
+### 1-F. GBIF 관측 — `observation_gbif.csv` (etl_gbif.py 산출)
+- **다운로드**: `R/gbif_01_all.R`(신규, `gbif_00_download.R` 자동화) — 9 서비스분류군 `occ_download` 일괄 제출(occ_download_queue 3동시)·SUCCEEDED 대기·import → `1_Data/raw/gbif/gbif_<group>.csv`.
+  - 술어: `country=KR ∧ taxonKey∈(classKey ∪ order폴백키) ∧ hasCoordinate ∧ !geoIssue ∧ PRESENT ∧ year≥1900 ∧ basisOfRecord∉{FOSSIL,LIVING,MATERIAL_CITATION}`. 자격증명=`~/.Renviron` GBIF_USER/PWD/EMAIL(비대화형은 `R_ENVIRON_USER` 지정).
+  - class 미해석(어류 Actinopterygii·Chondrichthyes·Petromyzontida=NONE, 파충류 Reptilia=HIGHERRANK 등)은 하위 order(목) 학명을 `name_backbone(rank="order")`로 폴백 해석(`4_References/gbif_order_keys.csv`). 다운로드 9분류군 총 ~400만 레코드(예: -P 1.56M·MS 778k·IN 760k·AM 363k·IV 292k·MM 141k·RP 71k·AV 24k·VP 4k).
+- **어댑터**: `etl_gbif.py` ← `gbif_<group>.csv` → 관측 스키마(`observation_nps`와 동일, **source='gbif'**). **학명 단독 매칭**(GBIF vernacular은 노이즈라 미사용; managed_key 정확일치). **분류군은 매칭된 ktsn의 master `taxon_group` 기준**(다운로드 파일 그룹이 아님) — 일부 다운로드가 order 폴백으로 광범위해도 각 레코드가 진짜 분류군으로 귀속. 좌표→시도 sjoin(BND_SIDO_PG) + (ktsn,taxon_group,sido,year) DISTINCT 좌표 집계.
+- **union**: `build_demo_data.union_obs()`가 agg(EcoBank)+nps(국립공원)+**gbif** 3원 합류(코드 반영). `improve_species_list`도 관측원에 gbif 포함.
+- ⚠ **geopandas 필요** → anaconda python(`C:\Users\yssfr\anaconda3\python.exe`)으로 실행(Windows Store python엔 geopandas 없음). EcoBank/국립공원 ETL도 동일.
 
 ---
 
@@ -110,17 +115,25 @@
 
 ## 3. 실행 순서 (전체 재빌드)
 
+> **주의: geopandas가 필요한 단계(etl_observation·etl_national_park·etl_gbif·improve_species_list)는
+> anaconda python으로 실행** — `C:\Users\yssfr\anaconda3\python.exe` (PATH의 Windows Store python엔 geopandas 없음).
+> GBIF 다운로드(R)는 비대화형이면 `$env:R_ENVIRON_USER='…\.Renviron'` 선설정.
+
 ```bash
 cd 3_ETL/python
 python build_ktsn_master.py                 # nibr+등급+적색 → ktsn_master.csv (+ktsn_aliases.csv)
+# GBIF (R, 자격증명 필요): submit(제출+대기) → import(zip→csv)
+Rscript ../R/gbif_01_all.R submit           # → gbif_<group>_key.txt (9분류군 occ_download)
+Rscript ../R/gbif_01_all.R import           # → 1_Data/raw/gbif/gbif_<group>.csv
 python etl_observation.py <ecobank ndjson…> # → observation_agg.csv  (override+alias 적용)
 python etl_national_park.py                 # → observation_nps.csv (+unmatched)
+python etl_gbif.py                          # → observation_gbif.csv (학명매칭·매칭ktsn 분류군 기준)
 python reconcile_unmatched.py               # → observation_nps_unmatched_candidates.csv (검토용)
 python improve_species_list.py              # → species_service_flags.csv
-python build_demo_data.py 2026-06-20        # → 5_App/demo/data/*.js (+.json)
-# (선택) Rscript R/gbif_00_download.R        # GBIF 다운로드(자격증명 필요)
-cd ../../5_App && python build_dist.py       # → 6_Deliverables/dist/ 배포본
+python build_demo_data.py 2026-06-28        # → 5_App/demo/data/*.js (+.json)
+cd ../../5_App && python build_dist.py --osm-only --out ../docs   # → docs/ (GitHub Pages)
 ```
 
-의존: master(+aliases) → 관측 ETL(override+alias 흡수) → reconcile → flags → demo_data. GBIF는 적재되면 flags·demo_data 재실행으로 합류.
+의존: master(+aliases) → 관측 ETL 3종(EcoBank/국립공원/GBIF, override+alias 흡수) → reconcile → flags → demo_data → dist.
+GBIF는 `gbif_<group>.csv`만 있으면 etl_gbif가 매칭ktsn 분류군 기준으로 정확 귀속(다운로드 파일 라벨에 비의존).
 보정 워크플로: reconcile 후보 검토 → `4_References/ktsn_name_overrides.csv` 승격 → 관측 ETL 재실행.

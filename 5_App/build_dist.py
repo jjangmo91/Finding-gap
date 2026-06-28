@@ -21,7 +21,7 @@ DATA = APP / "demo" / "data"
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
 PAGES = ["index.html", "service.html"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js", "obs_by_taxon.js",
-              "species_index.js", "sido.geojson"]
+              "species_index.js", "species_state.js", "sido.geojson"]
 
 HEADERS = """\
 /*
