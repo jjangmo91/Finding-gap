@@ -21,7 +21,7 @@ DATA = APP / "demo" / "data"
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
 PAGES = ["index.html", "service.html", "fg_supabase.js"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
-              "species_index.js", "species_state.js", "sido.geojson"]
+              "species_index.js", "species_state.js", "sido.geojson", "sigungu.geojson"]
 # 분류군별 관측은 분할 산출 — obs_meta.js + obs_<T>.js 전부 복사(서비스가 지연 로드)
 DATA_GLOBS = ["obs_*.js"]
 

@@ -21,6 +21,7 @@ MASTER = PROC / "ktsn_master.csv"
 AGG = PROC / "observation_agg.csv"
 AGG_NPS = PROC / "observation_nps.csv"               # 국립공원 ETL(다분류군) — 있으면 union
 AGG_GBIF = PROC / "observation_gbif.csv"             # GBIF 점유자료 ETL(다분류군) — 있으면 union
+AGG_SIGUNGU = PROC / "observation_sigungu.csv"       # 점DB 파생 시군구 집계(region=SIGUNGU_CD) — 있으면 시도CSV 대신 우선
 FLAGS = PROC / "species_service_flags.csv"           # 서비스 제외 종(해양포유류·무기록 어류)
 OUTDIR = BASE / "5_App" / "demo" / "data"
 OUT = OUTDIR / "demo_mm.json"
@@ -44,9 +45,32 @@ def load_excluded():
     return excl
 
 
+def _clean_year(y):
+    """비정상 연도(예 4225)는 미상('')으로 — 관측(발견) 자체는 유지."""
+    y = y or ""
+    if y:
+        try:
+            if not (YMIN <= int(y) <= YMAX):
+                y = ""
+        except ValueError:
+            y = ""
+    return y
+
+
 def union_obs():
-    """observation_agg(EcoBank) + observation_nps(국립공원) + observation_gbif(GBIF) → [(ktsn,taxon,sido,year,source,count)]."""
+    """관측 union → [(ktsn,taxon,region,year,source,count)].
+    region = 행정구역 키. observation_sigungu.csv(점DB 파생) 가 있으면 region=SIGUNGU_CD(5자리, 미상 '00000'),
+    없으면 기존 3개 시도 집계(region=시도명). region 은 하위(인코딩·집계)에서 불투명 키로만 쓰여 형식 무관."""
     rows = []
+    if AGG_SIGUNGU.exists():                          # 시군구 집계 우선(시도는 클라이언트가 앞2자리로 롤업)
+        for r in csv.DictReader(AGG_SIGUNGU.open(encoding="utf-8-sig")):
+            try:
+                c = int(r["obs_count"])
+            except (KeyError, ValueError):
+                continue
+            rows.append((r["ktsn"], r.get("taxon_group") or "", r["region"],
+                         _clean_year(r.get("year") or ""), r.get("source") or "", c))
+        return rows
     for p in (AGG, AGG_NPS, AGG_GBIF):
         if not p.exists():
             continue
@@ -55,15 +79,8 @@ def union_obs():
                 c = int(r["obs_count"])
             except (KeyError, ValueError):
                 continue
-            y = r.get("year") or ""
-            if y:                                     # 비정상 연도(예 4225)는 미상으로 — 관측(발견)은 유지
-                try:
-                    if not (YMIN <= int(y) <= YMAX):
-                        y = ""
-                except ValueError:
-                    y = ""
             rows.append((r["ktsn"], r.get("taxon_group") or "", r["sido"],
-                         y, r.get("source") or "", c))
+                         _clean_year(r.get("year") or ""), r.get("source") or "", c))
     return rows
 
 

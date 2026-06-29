@@ -85,6 +85,10 @@
   .scard .sci{font-style:italic;color:var(--muted);font-size:13.5px}
   .scard .row{margin-top:14px}
   .scard .row .k{font-size:11.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
+  .reg-toggle{position:absolute;top:8px;right:8px;display:flex;background:#fff;border:1px solid #cdd5d1;border-radius:7px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.14)}
+  .reg-toggle button{border:0;background:#fff;padding:5px 11px;font:600 12px system-ui,sans-serif;color:#5a665f;cursor:pointer}
+  .reg-toggle button.on{background:var(--accent);color:#fff}
+  .reg-toggle button+button{border-left:1px solid #e3e8e5}
   .regchips{display:flex;flex-wrap:wrap;gap:6px}
   .regchips .rc{background:#eef3f1;border:1px solid #d7e3df;border-radius:8px;padding:4px 9px;font-size:12px}
   .regchips .rc b{font-variant-numeric:tabular-nums;color:var(--accent)}
@@ -251,10 +255,19 @@ const SIDO_ABBR={'서울특별시':'서울','부산광역시':'부산','대구�
 const shortSido=s=>SIDO_ABBR[s]||(s||'').replace(/(특별자치도|특별자치시|특별시|광역시|도)$/,'')||s;
 
 /* ═══════ 공유 상태 ═══════ */
-let map=null, sidoLayer=null, SIDO_NAMES=[], mapMode='A';
+let map=null, sidoLayer=null, SIDO_NAMES=[], mapMode='A';   // sidoLayer = 활성 경계 레이어(토글 시 재지정)
+let regLevel='sido', regToggleEl=null;                     // 행정구역 표시 레벨(시도 ⇄ 시군구)
+const LAYERS={sido:null,sigungu:null};                     // 두 경계 레이어(활성만 표시)
+const ACODES={sido:[],sigungu:[]};                         // 레벨별 코드 목록(choropleth 순회)
+const RNAME={sido:{},sigungu:{}};                          // 코드 → 이름
 let curTaxon='MM', y0=null, y1=null, metric='found', sortKey='c', sortDir=-1;
-let selSidos=new Set(), METRIC=new Map(), DOM={min:0,max:1};
+let selSidos=new Set(), METRIC=new Map(), DOM={min:0,max:1};   // selSidos = 활성 레벨 선택 코드
 let SRES=[], selSpecies=null, selRegions=new Map(), selRegMax=0, sTax='', sy0=null, sy1=null;
+/* obs 의 region 은 시군구코드(5자리, 미상 '00000'); 시도는 앞2자리로 롤업 */
+function rkey(code){ return regLevel==='sido' ? String(code).slice(0,2) : String(code); }
+function isUnknownReg(c){ return !c || c==='00' || c==='00000'; }
+function rname(code){ if(isUnknownReg(code)) return '좌표미상';
+  const n=RNAME[regLevel][code]||code; return regLevel==='sido'?shortSido(n):n; }
 
 /* ═══════ 공유 지도(모드 A·B 재사용, setTarget 전환) ═══════ */
 function colorFor(v){
@@ -262,25 +275,28 @@ function colorFor(v){
   const L=(a,b)=>Math.round(a+(b-a)*t);
   return `rgba(${L(224,33)},${L(238,111)},${L(232,94)},0.82)`;
 }
-function sidoLabel(nm){
-  return new ol.style.Text({text:shortSido(nm),font:'11px system-ui,sans-serif',
+function regLabel(txt){
+  return new ol.style.Text({text:txt,font:'11px system-ui,sans-serif',
     fill:new ol.style.Fill({color:'#1b201d'}),stroke:new ol.style.Stroke({color:'#ffffff',width:2.4})});
 }
 function styleFn(feature){
-  const nm=feature.get('sido');
-  if(mapMode==='B'){                                    // 선택 종 발견 시도 강조
-    const c=selRegions.get(nm)||0, has=c>0;
+  const code=feature.get('code');
+  // 시군구는 252개라 전국 줌에선 라벨 생략(혼잡) → 줌인·선택 시에만 표시. 시도는 항상.
+  const showLabel = regLevel==='sido' || (map&&map.getView().getZoom()>=8.5) || selSidos.has(code);
+  const txt = showLabel ? regLabel(rname(code)) : undefined;
+  if(mapMode==='B'){                                    // 선택 종 발견 지역 강조
+    const c=selRegions.get(code)||0, has=c>0;
     const t=selRegMax>0?Math.min(1,c/selRegMax):0;
     return new ol.style.Style({
       fill:new ol.style.Fill({color:has?`rgba(47,111,94,${(0.35+0.5*t).toFixed(2)})`:'rgba(206,211,206,0.30)'}),
       stroke:new ol.style.Stroke({color:has?'#16241f':'#cfd3cf', width:has?1.8:0.7}),
-      text:sidoLabel(nm)});
+      text:txt});
   }
-  const v=METRIC.get(nm)||0, sel=selSidos.has(nm);     // 모드 A choropleth
+  const v=METRIC.get(code)||0, sel=selSidos.has(code);  // 모드 A choropleth
   return new ol.style.Style({
     fill:new ol.style.Fill({color:colorFor(v)}),
-    stroke:new ol.style.Stroke({color:sel?'#16241f':'#ffffff', width:sel?3.2:1}),
-    text:sidoLabel(nm)});
+    stroke:new ol.style.Stroke({color:sel?'#16241f':'#ffffff', width:sel?(regLevel==='sido'?3.2:2):(regLevel==='sido'?1:0.5)}),
+    text:txt});
 }
 function initMap(){
   if(typeof ol==='undefined'){ mapMsg.textContent='지도 라이브러리를 불러오지 못했습니다(네트워크 확인).'; return; }
@@ -299,24 +315,53 @@ function initMap(){
       console.warn(`vworld 타일 로드 실패(도메인 ${location.host} 미등록 가능) — OpenStreetMap 배경으로 전환.`); }});
     layers.push(vlayer);
   }
-  sidoLayer=new ol.layer.Vector({source:new ol.source.Vector(),style:styleFn});
-  layers.push(sidoLayer);
+  LAYERS.sido=new ol.layer.Vector({source:new ol.source.Vector(),style:styleFn});
+  LAYERS.sigungu=new ol.layer.Vector({source:new ol.source.Vector(),style:styleFn,visible:false});
+  sidoLayer=LAYERS.sido;
+  layers.push(LAYERS.sido, LAYERS.sigungu);
   map=new ol.Map({target:'map',layers,controls:ol.control.defaults.defaults({attribution:true}),
     view:new ol.View({center:ol.proj.fromLonLat([127.8,36.1]),zoom:6.6,minZoom:5,maxZoom:12})});
-  fetch('demo/data/sido.geojson').then(r=>r.json()).then(gj=>{
-    const feats=new ol.format.GeoJSON().readFeatures(gj,{dataProjection:'EPSG:4326',featureProjection:'EPSG:3857'});
-    sidoLayer.getSource().addFeatures(feats);
-    SIDO_NAMES=feats.map(f=>f.get('sido'));
+  addRegToggle();
+  Promise.all([
+    fetch('demo/data/sido.geojson').then(r=>r.json()),
+    fetch('demo/data/sigungu.geojson').then(r=>r.json())
+  ]).then(([gjSido,gjSig])=>{
+    const fmt=new ol.format.GeoJSON();
+    for(const [lvl,gj,nmKey] of [['sido',gjSido,'sido'],['sigungu',gjSig,'sigungu']]){
+      const feats=fmt.readFeatures(gj,{dataProjection:'EPSG:4326',featureProjection:'EPSG:3857'});
+      LAYERS[lvl].getSource().addFeatures(feats);
+      ACODES[lvl]=feats.map(f=>f.get('code'));
+      feats.forEach(f=>{ RNAME[lvl][f.get('code')]=f.get(nmKey); });
+    }
+    SIDO_NAMES=ACODES[regLevel];
     mapMsg.style.display='none';
     loadTaxon(curTaxon, ()=>{ recompute(); sidoLayer.changed(); renderTable(); });
-  }).catch(()=>{ mapMsg.textContent='시도 경계를 불러오지 못했습니다.'; });
+  }).catch(()=>{ mapMsg.textContent='경계 자료를 불러오지 못했습니다.'; });
   map.on('singleclick',e=>{
     if(mapMode!=='A') return;                            // 종별 모드 지도는 표시 전용
     let hit=false;
-    map.forEachFeatureAtPixel(e.pixel,f=>{ const nm=f.get('sido'); if(nm){ selSidos.has(nm)?selSidos.delete(nm):selSidos.add(nm); hit=true; } return true; });
+    map.forEachFeatureAtPixel(e.pixel,f=>{ const code=f.get('code'); if(code){ selSidos.has(code)?selSidos.delete(code):selSidos.add(code); hit=true; } return true; },
+      {layerFilter:l=>l===sidoLayer});                   // 활성 레벨 레이어만 클릭 대상
     if(!hit) selSidos.clear();
     sidoLayer.changed(); renderSelChips(); renderTable();
   });
+}
+function addRegToggle(){                                  // 지도 안 시도/시군구 레벨 토글
+  const el=document.createElement('div'); el.className='ol-unselectable reg-toggle';
+  el.innerHTML='<button data-l="sido" class="on">시도</button><button data-l="sigungu">시군구</button>';
+  el.addEventListener('click',ev=>{ const b=ev.target.closest('button'); if(b) setRegLevel(b.dataset.l); });
+  map.addControl(new ol.control.Control({element:el}));
+  regToggleEl=el;
+}
+function setRegLevel(l){
+  if(l===regLevel||!LAYERS[l]) return;
+  regLevel=l; SIDO_NAMES=ACODES[l];
+  LAYERS.sido.setVisible(l==='sido'); LAYERS.sigungu.setVisible(l==='sigungu');
+  sidoLayer=LAYERS[l]; selSidos.clear();
+  if(regToggleEl) regToggleEl.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.l===l));
+  if(mapMode==='A'){ recompute(); renderSelChips(); renderTable(); }
+  else if(selSpecies){ selRegions=speciesRegions(selSpecies,sy0,sy1); refreshSpeciesMap(); }
+  sidoLayer.changed();
 }
 
 /* ═══════ Mode A: 분류군별 조회 ═══════ */
@@ -338,19 +383,20 @@ function fillYearSels(){
 }
 function recompute(){
   const obs=obsA(), total=spA().length;
-  const bySido=new Map();
-  for(const [k,s,yy,c] of obs){ if(s==='미상')continue; const y=+yy; if(y<y0||y>y1)continue;
-    if(!bySido.has(s))bySido.set(s,new Set()); bySido.get(s).add(k); }
+  const byReg=new Map();                                 // 활성 레벨 코드 → 발견 종 Set
+  for(const [k,s,yy,c] of obs){ const rk=rkey(s); if(isUnknownReg(rk))continue; const y=+yy; if(y<y0||y>y1)continue;
+    if(!byReg.has(rk))byReg.set(rk,new Set()); byReg.get(rk).add(k); }
   METRIC=new Map();
-  const names=SIDO_NAMES.length?SIDO_NAMES:[...bySido.keys()];
-  for(const nm of names){ const f=(bySido.get(nm)||new Set()).size; METRIC.set(nm, metric==='found'?f:(total-f)); }
+  const codes=SIDO_NAMES.length?SIDO_NAMES:[...byReg.keys()];
+  for(const code of codes){ const f=(byReg.get(code)||new Set()).size; METRIC.set(code, metric==='found'?f:(total-f)); }
   const vals=[...METRIC.values()]; DOM={min:Math.min(0,...vals), max:Math.max(1,...vals)};
   legLo.textContent=nf(DOM.min); legHi.textContent=nf(DOM.max);
-  legCap.textContent= metric==='found'?'시도별 발견 종수(짙을수록 많음)':'시도별 미발견 종수(짙을수록 많음=공백 큼)';
+  const lvl=regLevel==='sido'?'시도별':'시군구별';
+  legCap.textContent= metric==='found'?`${lvl} 발견 종수(짙을수록 많음)`:`${lvl} 미발견 종수(짙을수록 많음=공백 큼)`;
 }
 function renderSelChips(){
-  if(!selSidos.size){ selChips.innerHTML='<span class="muted">지도에서 시도를 클릭(폴리곤 밖 클릭=전체)</span>'; return; }
-  selChips.innerHTML=[...selSidos].map(s=>`<span class="c">${s}</span>`).join('')+
+  if(!selSidos.size){ selChips.innerHTML=`<span class="muted">지도에서 ${regLevel==='sido'?'시도':'시군구'}를 클릭(폴리곤 밖 클릭=전체)</span>`; return; }
+  selChips.innerHTML=[...selSidos].map(code=>`<span class="c">${rname(code)}</span>`).join('')+
     `<button class="clr" onclick="clearSel()">전체 해제</button>`;
 }
 function clearSel(){ selSidos.clear(); if(sidoLayer)sidoLayer.changed(); renderSelChips(); renderTable(); }
@@ -358,7 +404,7 @@ function clearSel(){ selSidos.clear(); if(sidoLayer)sidoLayer.changed(); renderS
 function tableRows(){
   const obs=obsA();
   const cnt=new Map();
-  for(const [k,s,yy,c] of obs){ if(selSidos.size && !selSidos.has(s))continue; const y=+yy; if(y<y0||y>y1)continue; cnt.set(k,(cnt.get(k)||0)+c); }
+  for(const [k,s,yy,c] of obs){ if(selSidos.size && !selSidos.has(rkey(s)))continue; const y=+yy; if(y<y0||y>y1)continue; cnt.set(k,(cnt.get(k)||0)+c); }
   const sp=spA();
   let rows=sp.map(x=>({k:x.k,n:x.n,s:x.s,g:x.g,r:x.r,c:cnt.get(x.k)||0,found:cnt.has(x.k)}));
   const egr=g=>g==='I'?0:g==='II'?1:2;
@@ -404,7 +450,7 @@ function downloadCSV(){
   const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
   const body=rows.map(x=>[x.n,x.s,x.g?x.g+'급':'',x.r,x.c].map(esc).join(','));
   const csv='﻿'+[head.join(','),...body].join('\r\n');
-  const reg=selSidos.size?[...selSidos].map(shortSido).join('+'):'전국';
+  const reg=selSidos.size?[...selSidos].map(rname).join('+'):'전국';
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`${TAXON_KOR[curTaxon]}_${reg}_${y0}-${y1}_${metric==='found'?'발견':'미발견'}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
@@ -428,7 +474,7 @@ function fillSearchYears(){
 }
 function speciesRegions(sp,a,b){
   const m=new Map(), rows=(OBS[sp.t]&&OBS[sp.t].obs)||[];
-  for(const [k,s,yy,c] of rows){ if(k!==sp.k)continue; const y=+yy; if(y<a||y>b)continue; m.set(s,(m.get(s)||0)+c); }
+  for(const [k,s,yy,c] of rows){ if(k!==sp.k)continue; const y=+yy; if(y<a||y>b)continue; const rk=rkey(s); m.set(rk,(m.get(rk)||0)+c); }
   return m;
 }
 function doSearch(){
@@ -458,10 +504,10 @@ function doSearch(){
 }
 function showIdx(i){ if(SRES[i]) showSpecies(SRES[i]); }
 function refreshSpeciesMap(){
-  const vals=[...selRegions.entries()].filter(([s])=>s!=='미상').map(([,c])=>c);
+  const vals=[...selRegions.entries()].filter(([c])=>!isUnknownReg(c)).map(([,c])=>c);
   selRegMax=vals.length?Math.max(...vals):0;
-  const hit=[...selRegions.keys()].filter(s=>s!=='미상').length;
-  if(legCapB) legCapB.textContent=selSpecies?`${selSpecies.n||selSpecies.s} · ${sy0}–${sy1} 발견 시도 ${hit}곳`:'';
+  const hit=[...selRegions.keys()].filter(c=>!isUnknownReg(c)).length;
+  if(legCapB) legCapB.textContent=selSpecies?`${selSpecies.n||selSpecies.s} · ${sy0}–${sy1} 발견 ${regLevel==='sido'?'시도':'시군구'} ${hit}곳`:'';
   if(mapMsgB) mapMsgB.style.display=selSpecies?'none':'';
   if(mapMode==='B'&&sidoLayer) sidoLayer.changed();
 }
@@ -475,7 +521,7 @@ function renderSpecies(sp){
   const eg=isEndangered(sp.g);
   const ent=[...selRegions.entries()].sort((a,b)=>b[1]-a[1]);
   const regHtml=ent.length
-    ? `<div class="regchips">`+ent.map(([s,c])=>`<span class="rc">${s==='미상'?'좌표미상':s} <b>${nf(c)}</b></span>`).join('')+`</div>`
+    ? `<div class="regchips">`+ent.map(([code,c])=>`<span class="rc">${rname(code)} <b>${nf(c)}</b></span>`).join('')+`</div>`
     : `<span class="muted">${sy0}–${sy1} 조사자료에서 관측 기록이 없습니다(발견공백).</span>`;
   const reportLink=eg
     ? `<a class="lk danger" href="${NATURING}" target="_blank" rel="noopener noreferrer"><span><span class="t">Naturing 멸종위기종 제보</span><br><span class="d">시민과학 관찰 제보 프로젝트 →</span></span></a>`
@@ -486,7 +532,7 @@ function renderSpecies(sp){
       <button class="watchbtn" data-k="${sp.k}" style="margin-left:auto" hidden>☆ 관심 종</button>
     </div>
     <div style="margin-top:8px">${badges(sp.g,sp.r)||'<span class="muted">일반종</span>'} <span class="badge" style="background:#eef3f1;color:#2f6f5e">${TAXON_KOR[sp.t]||sp.t}</span></div>
-    <div class="row"><div class="k">발견 지역(시도) · ${sy0}–${sy1}</div>${regHtml}</div>
+    <div class="row"><div class="k">발견 지역(${regLevel==='sido'?'시도':'시군구'}) · ${sy0}–${sy1}</div>${regHtml}</div>
     <div class="row"><div class="k">상세 정보 · 데이터 제보</div>
       <div class="links">
         <a class="lk primary" href="${NIBR(sp.k)}" target="_blank" rel="noopener noreferrer"><span><span class="t">한반도의 생물다양성</span><br><span class="d">국립생물자원관 종 상세 →</span></span></a>

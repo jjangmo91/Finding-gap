@@ -108,6 +108,13 @@
 - **스키마**: `ktsn, taxon_group, bio, n, min, q1, median, q3, max, mean`. 좌표 보유 20,275종 중 래스터 범위 내 약 17,948종 집계.
 - ⚠ Rscript는 **공백 포함 경로의 스크립트 파일 직접 실행 실패**(exit 127) → `Rscript --vanilla -e "source('…/bioclim_points.R')"` 로 실행.
 
+### 1-I. 시군구 집계 — `observation_sigungu.csv` (점 DB 파생, region=SIGUNGU_CD)
+- **생성**: `python/build_sigungu_agg.py` ← obs_points 고유좌표 + `spatial/bnd_all_00_2025_2Q.zip`(SGIS 2025 2분기, 중첩 zip 안 `bnd_sigungu_00_2025_2Q`, **252개**, EPSG:5179). 2021 TL_SCCO_SIG 폐기(토폴로지·최신성).
+- **방법**: 고유좌표(1.41M) → 시군구 point-in-polygon(within) 후 미매칭은 **2km 이내 최근접 시군구**(투영 5179) 폴백, 잔여는 미상 `00000`. within 93.7%→폴백후 98.8%. 메모리 join 으로 (ktsn,taxon_group,**region**,year,source) COUNT → 집계(원본 DB 무변경).
+- **스키마**: `ktsn, taxon_group, region(SIGUNGU_CD 5자리), year, source, obs_count`. **총 obs_count = 기존 시도집계와 정확히 동일(차이 0)** — 시도는 `region[:2]`로 롤업.
+- **소비**: `build_demo_data.union_obs()` 가 이 파일 있으면 **우선**(region=시군구코드) → obs_<T>.js 의 region 이 시군구코드. 없으면 기존 3개 시도 CSV(region=시도명) 폴백.
+- **웹 경계**(표시용): `mapshaper bnd_*_2025_2Q.shp -simplify 3% keep-shapes -proj wgs84 -o precision=0.0001` → `5_App/demo/data/{sido,sigungu}.geojson`(props: sido/sigungu 명 + code 2/5자리 + sido_cd). 3% 단순화 왜곡 = 면적 최대 0.46%(신안군). 서비스 지도는 시도/시군구 레이어 토글, 매칭은 원본 풀해상도라 정확도 무관.
+
 ---
 
 ## 2. 서비스 테이블 — `5_App/demo/data/` (정적 .js + .json)
@@ -144,13 +151,14 @@ python etl_observation.py <ecobank ndjson…> # → observation_agg.csv  (overri
 python etl_national_park.py                 # → observation_nps.csv (+unmatched)
 python etl_gbif.py                          # → observation_gbif.csv (학명매칭·매칭ktsn 분류군 기준)
 python build_points_db.py                   # → observations.sqlite (obs_points; 점 DB + 시도집계 동일 파생 검증)
+python build_sigungu_agg.py                 # → observation_sigungu.csv (점DB→시군구 집계; region=SIGUNGU_CD, obs_count 보존)
 Rscript --vanilla -e "source('../R/bioclim_points.R')"  # → species_bioclim.csv (종별 bio01~19 분포; 공백경로라 source 사용)
 python reconcile_unmatched.py               # → observation_nps_unmatched_candidates.csv (검토용)
 python improve_species_list.py              # → species_service_flags.csv
-python build_demo_data.py 2026-06-28        # → 5_App/demo/data/*.js (+.json)
-cd ../../5_App && python build_dist.py --osm-only --out ../docs   # → docs/ (GitHub Pages)
+python build_demo_data.py 2026-06-29        # → 5_App/demo/data/*.js (시군구 우선; +sido/sigungu.geojson 별도 mapshaper)
+cd ../../5_App && python build_dist.py --osm-only --out docs   # → docs/ (GitHub Pages; --out 은 BASE 기준이라 'docs')
 ```
 
-의존: master(+aliases) → 관측 ETL 3종(EcoBank/국립공원/GBIF, override+alias 흡수) → reconcile → flags → demo_data → dist.
+의존: master(+aliases) → 관측 ETL 3종(EcoBank/국립공원/GBIF, override+alias 흡수) → points_db → **sigungu_agg** → reconcile → flags → demo_data → dist.
 GBIF는 `gbif_<group>.csv`만 있으면 etl_gbif가 매칭ktsn 분류군 기준으로 정확 귀속(다운로드 파일 라벨에 비의존).
 보정 워크플로: reconcile 후보 검토 → `4_References/ktsn_name_overrides.csv` 승격 → 관측 ETL 재실행.
