@@ -102,7 +102,10 @@
   .rdl:hover{background:var(--accent);color:#fff}
   /* 종 카드 — 발견지점 기후 및 고도 막대 */
   .khead{display:flex;align-items:center;gap:6px}
-  .envlegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 13px;margin:2px 0 11px;font-size:11px;color:#5a635d}
+  .envhead{display:grid;grid-template-columns:92px 1fr 138px;gap:9px;align-items:center;margin:0 0 7px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .envhead .vh{grid-column:3;text-align:right;font-size:11px;font-weight:600;color:#5a635d;white-space:nowrap}
+  .envlegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 13px;font-size:11px;color:#5a635d}
+  .envlegend.foot{margin:11px 0 0;padding-top:9px;border-top:1px solid var(--line)}
   .envlegend .lgi{display:inline-flex;align-items:center;gap:5px}
   .envlegend .lgi i{display:inline-block;flex:none}
   .envlegend i.lg-area{width:18px;height:10px;border-radius:5px;background:#eceeec;border:1px solid #dcdfdc}
@@ -110,7 +113,6 @@
   .envlegend i.lg-range{width:18px;height:2px;border-radius:1px;background:#aeb6b0}
   .envlegend i.lg-box{width:18px;height:10px;border-radius:3px;background:var(--accent);opacity:.6}
   .envlegend i.lg-smed{width:2px;height:13px;border-radius:1px;background:#1b3a31}
-  .envlegend .lgi.txt{color:#414a45;font-weight:600}
   .envbars{display:flex;flex-direction:column;gap:9px;margin-top:2px}
   .envrow{display:grid;grid-template-columns:92px 1fr 138px;align-items:center;gap:9px;font-size:12px}
   .envrow .lbl{color:#414a45}
@@ -699,14 +701,14 @@ function envBars(sp){                                     // 발견지점 기후
       `<span class="val"><b>${fmtVal(mean,v)}</b>${sdTxt} ${v.unit}</span></div>`;
   }
   if(!bars) return '';
-  const legend=`<div class="envlegend">`+
+  const head=`<div class="envhead"><span class="vh">평균 ± 표준편차</span></div>`;   // 값 컬럼 위 헤더
+  const legend=`<div class="envlegend foot">`+                                       // 막대 하단 도형 범례
     `<span class="lgi"><i class="lg-area"></i>전국 분포</span>`+
     `<span class="lgi"><i class="lg-ncirc"></i>전국 중앙값</span>`+
     `<span class="lgi"><i class="lg-range"></i>종 발견 범위</span>`+
     `<span class="lgi"><i class="lg-box"></i>집중 구간(Q1–Q3)</span>`+
-    `<span class="lgi"><i class="lg-smed"></i>발견 지점 중앙값</span>`+
-    `<span class="lgi txt">평균±표준편차</span></div>`;
-  return legend + `<div class="envbars">${bars}</div>`+
+    `<span class="lgi"><i class="lg-smed"></i>발견 지점 중앙값</span></div>`;
+  return head + `<div class="envbars">${bars}</div>` + legend +
     `<div class="envnote">발견 기록이 있는 지점의 환경값 분포 — 실제 분포역과 다를 수 있습니다.</div>`;
 }
 function renderSpecies(sp){
