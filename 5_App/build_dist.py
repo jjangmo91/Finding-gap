@@ -22,9 +22,10 @@ DATA = APP / "demo" / "data"
 PAGES = ["index.html", "service.html", "fg_supabase.js"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
               "species_index.js", "species_state.js", "sido.geojson", "sigungu.geojson",
-              "env_meta.js", "species_env.js"]
-# 분류군별 관측은 분할 산출 — obs_meta.js + obs_<T>.js 전부 복사(서비스가 지연 로드)
-DATA_GLOBS = ["obs_*.js"]
+              "env_meta.js", "species_env.js",
+              "env_grid.js", "gap_meta.js"]        # 발견공백 A: 전국 1km 격자 + 메타(지연 로드)
+# 분류군별 관측·점유는 분할 산출 — obs_meta.js + obs_<T>.js + cells_<T>.js 전부 복사(서비스가 지연 로드)
+DATA_GLOBS = ["obs_*.js", "cells_*.js"]
 # 환경변수 래스터 오버레이(서브디렉터리 보존)
 DATA_DIRS = ["env"]
 

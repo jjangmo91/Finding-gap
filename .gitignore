@@ -32,6 +32,8 @@ id_rsa*
 !1_Data/raw/.gitkeep
 1_Data/processed/**
 !1_Data/processed/.gitkeep
+1_Data/spatial/**
+!1_Data/spatial/.gitkeep
 # 공간데이터 SHP 전체 세트 (필요시 LFS / 가공 GeoJSON만 공유)
 *.shp
 *.shx

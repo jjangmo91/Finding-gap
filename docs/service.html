@@ -98,6 +98,15 @@
   .regtbl tbody tr:last-child td{border-bottom:0}
   .regtbl .num{text-align:right;font-variant-numeric:tabular-nums}
   .regtbl-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px;flex-wrap:wrap}
+  .spview-tg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .spview-tg button{border:0;background:#fff;color:#5a635d;font-size:12px;padding:3px 10px;cursor:pointer;font-weight:500}
+  .spview-tg button+button{border-left:1px solid var(--line)}
+  .spview-tg button.on{background:var(--accent);color:#fff}
+  .gaplegend{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;font-size:11px;color:#5a635d;margin-bottom:7px}
+  .gaplegend .lgi{display:inline-flex;align-items:center;gap:5px}
+  .gaplegend .lgi i{width:11px;height:11px;border-radius:2px;display:inline-block;flex:none}
+  .gaptbl tbody tr{cursor:pointer}
+  .gaptbl tbody tr:hover td{background:#f1f6f3}
   .rdl{border:1px solid var(--accent);background:#fff;color:var(--accent);font:600 12px system-ui,sans-serif;padding:5px 11px;border-radius:7px;cursor:pointer}
   .rdl:hover{background:var(--accent);color:#fff}
   /* 종 카드 — 발견지점 기후 및 고도 막대 */
@@ -331,6 +340,140 @@ function isUnknownReg(c){ return !c || c==='00' || c==='00000'; }
 function rname(code){ if(isUnknownReg(code)) return '좌표미상';
   const n=RNAME[regLevel][code]||code; return regLevel==='sido'?shortSido(n):n; }
 
+/* ═══════ 발견공백 A: 환경적합 미발견후보 ═══════
+   종카드 발견/미발견 토글. 미발견 = 학습없는 BIOCLIM 엔벨로프(종 q1/q3 → [Q1-1.5IQR,Q3+1.5IQR], AND, binary).
+   자산: env_grid.js(__GRID__ 전국 1km 셀) · cells_<T>.js(__CELLS__[t] 종별 점유) · gap_meta.js(__GAPMETA__).
+   엔벨로프는 이미 로드된 __ENV__(종 분위수)로 즉석 산출 → 별도 자산 불필요. */
+let GRID=null, GAPMETA=null, GIDX=null, spView='found', GAPRES=null;   // spView: 종카드 우측 표 전환(발견/미발견)
+let gapLayer=null, gapSource=null;                                     // WebGLPoints 후보셀 레이어(모드 B·gap 뷰)
+const GAP_COL={new:'#1a9641', old:'#e08214', recent:'#9fb0a8'};        // 신규후보·재발견후보·최근발견
+const GAP_MODEL=['bio01','bio06','bio12','dem','ndvi'];                // 전 종 공통(ndwi 는 수생 종만 추가)
+const IQR_K=0.95;   // 엔벨로프 폭 = [Q1-K·IQR, Q3+K·IQR]. K=0.95≈중앙 95%(정규기준), 1.5=Tukey울타리(≈99%), 0.72≈90%
+function _loadScript(src, cb){ const s=document.createElement('script'); s.src=src;
+  s.onload=cb; s.onerror=()=>{ console.warn('로드 실패',src); cb(); }; document.head.appendChild(s); }
+let _gapCbs=null;
+function ensureGap(cb){                                   // gap_meta + env_grid 지연 로드(최초 미발견 진입 시)
+  if(GRID&&GAPMETA){ cb&&cb(); return; }
+  if(_gapCbs){ _gapCbs.push(cb); return; }
+  _gapCbs=[cb]; let need=2;
+  const done=()=>{ if(--need>0) return;
+    GRID=window.__GRID__||{}; GAPMETA=window.__GAPMETA__||{};
+    GAPMETA._ndwi=new Set(GAPMETA.ndwi||[]);
+    GIDX=new Map(); const c=GRID.cid||[]; for(let i=0;i<c.length;i++) GIDX.set(c[i],i);
+    const cbs=_gapCbs; _gapCbs=null; cbs.forEach(f=>f&&f()); };
+  _loadScript('demo/data/gap_meta.js', done);
+  _loadScript('demo/data/env_grid.js', done);
+}
+const _cellCbs={};
+function cellsReady(t){ return !t || !!((window.__CELLS__||{})[t]); }
+function loadCells(t, cb){                                // 분류군별 종 점유(obs_<T> 와 동일 지연 라우팅)
+  if(cellsReady(t)){ cb&&cb(); return; }
+  if(_cellCbs[t]){ _cellCbs[t].push(cb); return; }
+  _cellCbs[t]=[cb];
+  const done=()=>{ const cbs=_cellCbs[t]; _cellCbs[t]=null; cbs.forEach(f=>f&&f()); };
+  _loadScript(`demo/data/cells_${_txfile(t)}.js`, done);
+}
+function speciesEnvelope(sp){                             // 종 → {var:[lo,hi]} (IQR 엔벨로프; ndwi 는 수생 종만)
+  const row=(window.__ENV__||{})[sp.k]; if(!row||!ENVMETA) return null;
+  const vi={}; ENVMETA.vars.forEach((v,i)=>{ vi[v.key]=i; });
+  const model=GAP_MODEL.concat(GAPMETA._ndwi.has(sp.k)?['ndwi']:[]);
+  const env={};
+  for(const k of model){ const idx=vi[k]; if(idx==null) continue;
+    const b=idx*7, q1=row[b+1], q3=row[b+3];
+    if(q1==null||q3==null) continue; const iqr=q3-q1;
+    env[k]=[q1-IQR_K*iqr, q3+IQR_K*iqr]; }
+  return env;
+}
+function computeCandidate(sp){                            // 셀별 3상태 분류 + 시군구 적합지 비율
+  const n=(GAPMETA.n&&GAPMETA.n[sp.k])||0;
+  if(n<10) return {gated:true, n};                        // 신뢰게이트: 관측 n<10 → 후보 미제공
+  const env=speciesEnvelope(sp); const keys=env?Object.keys(env):[];
+  if(!keys.length) return {gated:true, n};
+  const S=GRID.scale, cid=GRID.cid, lon=GRID.lon, lat=GRID.lat, sg=GRID.sg;
+  const CT=window.__CELLS__||{}, occ=new Map(), oc=(CT[sp.t]||{})[sp.k];
+  if(oc){ for(let j=0;j<oc.c.length;j++) occ.set(oc.c[j], oc.y[j]); }
+  const cutoff=new Date().getFullYear()-10;               // 재발견 기준 = 현재연도-10(동적)
+  const cells=[], numBySg=new Map(); let cNew=0, cOld=0, cRec=0;
+  for(let i=0;i<cid.length;i++){
+    const o=occ.get(cid[i]); let st;
+    if(o!==undefined){ st=(o>cutoff)?2:1; if(st===2)cRec++; else cOld++; }   // 최근발견 / 재발견후보
+    else {
+      let ok=true;
+      for(const k of keys){ const cv=GRID[k][i]; if(cv==null){ ok=false; break; }
+        const val=cv/S[k], e=env[k]; if(val<e[0]||val>e[1]){ ok=false; break; } }
+      if(!ok) continue;
+      st=0; cNew++; numBySg.set(sg[i], (numBySg.get(sg[i])||0)+1);           // 신규후보(적합·미발견)
+    }
+    cells.push([lon[i]/S.lon, lat[i]/S.lat, st]);
+  }
+  const ratios=[];
+  numBySg.forEach((num,sgi)=>{ const denom=GRID.sgn[sgi]||0, code=GRID.sgcodes[sgi];
+    ratios.push({code, num, denom, ratio:denom?num/denom:0}); });
+  return {gated:false, n, cells, ratios, counts:{new:cNew, old:cOld, recent:cRec}, cutoff};
+}
+function updateGapMap(res){                               // 후보셀 → WebGLPoints 소스
+  if(!gapSource) return;
+  gapSource.clear();
+  if(res && !res.gated && res.cells && res.cells.length){
+    gapSource.addFeatures(res.cells.map(([lo,la,st])=>{
+      const f=new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat([lo,la]))); f.set('st',st); return f; }));
+  }
+}
+let gapSortDir=-1;                                        // 적합지 비율표 정렬(기본 비율 내림차순)
+function gapTable(res){
+  if(res.gated) return `<div id="gapHost"><span class="muted">관측 기록이 ${nf(res.n||0)}건으로 적어 환경적합 후보를 제공하지 않습니다(표본 부족).</span></div>`;
+  const c=res.counts;
+  if(!res.ratios.length) return `<div id="gapHost"><span class="muted">현재 조사자료 기준 새로운 환경적합 후보 지역이 없습니다.</span></div>`;
+  const rows=res.ratios.map(r=>({...r,
+    sido:shortSido(RNAME.sido[String(r.code).slice(0,2)]||''),
+    sigungu:RNAME.sigungu[r.code]||r.code})).sort((a,b)=> (a.ratio-b.ratio)*gapSortDir || b.num-a.num);
+  const body=rows.map(r=>`<tr onclick="zoomSigungu('${r.code}')" title="지도에서 이 시군구로 이동">`+
+    `<td>${r.sido}</td><td>${r.sigungu}</td>`+
+    `<td class="num">${(r.ratio*100).toFixed(1)}%</td></tr>`).join('');
+  return `<div id="gapHost">`+
+    `<div class="gaplegend">`+
+      `<span class="lgi"><i style="background:${GAP_COL.new}"></i>신규후보 ${nf(c.new)}</span>`+
+      `<span class="lgi"><i style="background:${GAP_COL.old}"></i>재발견후보 ${nf(c.old)}</span>`+
+      `<span class="lgi"><i style="background:${GAP_COL.recent}"></i>최근발견 ${nf(c.recent)}</span>`+
+      `<span class="muted">· 1km 격자</span></div>`+
+    `<div class="regtbl-wrap"><table class="regtbl gaptbl"><thead><tr>`+
+      `<th>시도</th><th>시군구</th>`+
+      `<th onclick="gapSortDir*=-1;rerenderGap()" class="num" title="적합지 비율로 정렬">적합지 비율${gapSortDir<0?' ▼':' ▲'}</th>`+
+    `</tr></thead><tbody>${body}</tbody></table></div>`+
+    `<div class="regtbl-foot"><span class="muted">${nf(rows.length)}개 시군구 · 신규후보 ${nf(c.new)}셀 · 행 클릭=해당 시군구로 이동</span></div>`+
+    `<div class="envnote">기존 발견지점의 환경범위(기후·고도·식생${GAPMETA._ndwi.has(selSpecies.k)?'·수분':''})와 맞고 아직 발견기록이 없는 1km 지역입니다. 실제 서식을 보장하지 않습니다.</div>`+
+  `</div>`;
+}
+function rerenderGap(){ const h=document.getElementById('gapHost'); if(h&&GAPRES) h.outerHTML=gapTable(GAPRES); }
+function zoomSigungu(code){                               // 표 행 클릭 → 해당 시군구로 지도 이동
+  if(!map||!LAYERS.sigungu) return;
+  if(regLevel!=='sigungu' && typeof setRegLevel==='function') setRegLevel('sigungu');
+  const src=LAYERS.sigungu.getSource();
+  const f=src.getFeatures().find(x=>x.get('code')===code);
+  if(f){ map.getView().fit(f.getGeometry().getExtent(), {padding:[40,40,40,40], maxZoom:11}); }
+}
+function setSpView(v){                                    // 발견/미발견 토글
+  if(spView===v) return; spView=v;
+  document.querySelectorAll('.spview-tg [data-v]').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+  renderSpView();
+}
+function renderSpView(){                                  // 우측 표 + 지도(발견 강조 ⇄ 후보셀) 전환
+  const host=document.getElementById('spViewHost'); if(!host||!selSpecies) return;
+  if(spView==='found'){
+    GAPRES=null; host.innerHTML=speciesRegionTable(selSpecies);
+    if(gapLayer) gapLayer.setVisible(false); updateGapMap(null); refreshSpeciesMap();
+  } else {
+    host.innerHTML='<span class="muted">환경적합 후보를 계산하는 중…</span>';
+    const sp=selSpecies;
+    ensureGap(()=>loadCells(sp.t, ()=>{
+      if(spView!=='gap'||selSpecies!==sp) return;         // 그 사이 종·뷰 바뀌면 폐기
+      const res=computeCandidate(sp); GAPRES=res;
+      const h=document.getElementById('spViewHost'); if(h) h.innerHTML=gapTable(res);
+      updateGapMap(res); refreshSpeciesMap();
+    }));
+  }
+}
+
 /* ═══════ 공유 지도(모드 A·B 재사용, setTarget 전환) ═══════ */
 function colorFor(v){
   const t=DOM.max<=DOM.min?0:(v-DOM.min)/(DOM.max-DOM.min);
@@ -347,6 +490,11 @@ function styleFn(feature){
   const showLabel = regLevel==='sido' || (map&&map.getView().getZoom()>=8.5) || selSidos.has(code);
   const txt = showLabel ? regLabel(rname(code)) : undefined;
   if(mapMode==='B'){                                    // 선택 종 발견 지역 강조
+    if(spView==='gap'){                                 // 미발견(후보셀) 뷰 = 경계는 채움없이 윤곽만(셀이 가려지지 않게)
+      return new ol.style.Style({
+        fill:new ol.style.Fill({color:'rgba(0,0,0,0)'}),
+        stroke:new ol.style.Stroke({color:'#9aa39c', width:0.6}), text:txt});
+    }
     const c=selRegions.get(code)||0, has=c>0;
     const t=selRegMax>0?Math.min(1,c/selRegMax):0;
     return new ol.style.Style({
@@ -378,6 +526,14 @@ function initMap(){
     layers.push(vlayer);
   }
   initEnvLayers(layers);                                 // 환경변수 래스터(폴리곤 아래·배경 위)
+  try{                                                   // 발견공백 A 후보셀(WebGLPoints) — 경계보다 아래
+    gapSource=new ol.source.Vector();
+    gapLayer=new ol.layer.WebGLPoints({source:gapSource, visible:false, style:{symbol:{
+      symbolType:'square', size:5,
+      color:['match',['get','st'], 0, GAP_COL.new, 1, GAP_COL.old, 2, GAP_COL.recent, '#999999'],
+      opacity:['match',['get','st'], 0, 0.85, 1, 0.8, 2, 0.5, 0.6]}}});
+    layers.push(gapLayer);
+  }catch(e){ gapLayer=null; console.warn('WebGL 후보 레이어 초기화 실패 — 표만 제공',e); }
   LAYERS.sido=new ol.layer.Vector({source:new ol.source.Vector(),style:styleFn});
   LAYERS.sigungu=new ol.layer.Vector({source:new ol.source.Vector(),style:styleFn,visible:false});
   sidoLayer=LAYERS.sido;
@@ -624,7 +780,13 @@ function refreshSpeciesMap(){
   const vals=[...selRegions.entries()].filter(([c])=>!isUnknownReg(c)).map(([,c])=>c);
   selRegMax=vals.length?Math.max(...vals):0;
   const hit=[...selRegions.keys()].filter(c=>!isUnknownReg(c)).length;
-  if(legCapB) legCapB.textContent=selSpecies?`${selSpecies.n||selSpecies.s} · ${sy0}–${sy1} 발견 ${regLevel==='sido'?'시도':'시군구'} ${hit}곳`:'';
+  const gapOn=mapMode==='B' && spView==='gap' && !!selSpecies;
+  if(gapLayer) gapLayer.setVisible(gapOn);
+  if(legCapB){
+    if(gapOn && GAPRES && !GAPRES.gated){ const c=GAPRES.counts;
+      legCapB.textContent=`${selSpecies.n||selSpecies.s} · 신규후보 ${nf(c.new)} · 재발견후보 ${nf(c.old)} · 최근발견 ${nf(c.recent)} (1km)`; }
+    else legCapB.textContent=selSpecies?`${selSpecies.n||selSpecies.s} · ${sy0}–${sy1} 발견 ${regLevel==='sido'?'시도':'시군구'} ${hit}곳`:'';
+  }
   if(mapMsgB) mapMsgB.style.display=selSpecies?'none':'';
   if(mapMode==='B'&&sidoLayer) sidoLayer.changed();
 }
@@ -715,7 +877,6 @@ function renderSpecies(sp){
   selSpecies=sp;
   selRegions=speciesRegions(sp,sy0,sy1);                  // 지도 강조용(활성 레벨)
   const eg=isEndangered(sp.g);
-  const regHtml=speciesRegionTable(sp);                   // 발견지역 표(시도·시군구·발견수)
   const envHtml=envBars(sp);                              // 기후·지형 지위 막대(데이터 있을 때만)
   const envRow=envHtml?`<div class="row"><div class="k khead">발견지점 기후 및 고도</div>${envHtml}</div>`:'';
   const reportLink=eg
@@ -727,7 +888,13 @@ function renderSpecies(sp){
       <button class="watchbtn" data-k="${sp.k}" style="margin-left:auto" hidden>☆ 관심 종</button>
     </div>
     <div style="margin-top:8px">${badges(sp.g,sp.r)||'<span class="muted">일반종</span>'} <span class="badge" style="background:#eef3f1;color:#2f6f5e">${TAXON_KOR[sp.t]||sp.t}</span></div>
-    <div class="row"><div class="k">발견 지역(시군구) · ${sy0}–${sy1}</div>${regHtml}</div>
+    <div class="row"><div class="k khead" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>분포 · ${sy0}–${sy1}</span>
+        <span class="spview-tg">
+          <button data-v="found" class="${spView==='found'?'on':''}">발견 지역</button>
+          <button data-v="gap" class="${spView==='gap'?'on':''}">미발견 후보</button>
+        </span></div>
+      <div id="spViewHost"></div></div>
     ${envRow}
     <div class="row"><div class="k">상세 정보 · 데이터 제보</div>
       <div class="links">
@@ -737,11 +904,14 @@ function renderSpecies(sp){
       <div class="muted" style="margin-top:8px">${eg?'멸종위기 야생생물 — 관찰 시 Naturing 제보 프로젝트로':'일반종 — 관찰 자료는 EcoBank로 제보'}</div>
     </div>
   </div>`;
-  refreshSpeciesMap();
+  sCard.querySelectorAll('.spview-tg [data-v]').forEach(b=>{ b.onclick=()=>setSpView(b.dataset.v); });
+  renderSpView();                                        // 현재 뷰(발견/미발견)로 우측 표 + 지도
   if(window.fgWatch) window.fgWatch.decorate(sp.k);     // 관심 종 ☆ 버튼(로그인 시 활성)
   if(window.innerWidth<=880) sCard.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-function clearSelSpecies(){ selSpecies=null; selRegions=new Map(); sCard.innerHTML=''; refreshSpeciesMap(); }
+function clearSelSpecies(){ selSpecies=null; selRegions=new Map(); GAPRES=null;
+  if(gapLayer)gapLayer.setVisible(false); if(gapSource)gapSource.clear();
+  sCard.innerHTML=''; refreshSpeciesMap(); }
 
 /* 분류군별 조회 테이블의 종 클릭 → 종별 검색(Mode B)으로 전환 + 해당 종 카드 표시 */
 function openSpecies(k){
@@ -760,6 +930,7 @@ function setMode(m){
   mapMode=m;
   tabA.classList.toggle('on',m==='A'); tabB.classList.toggle('on',m==='B');
   modeA.style.display=m==='A'?'':'none'; modeB.style.display=m==='B'?'':'none';
+  if(gapLayer) gapLayer.setVisible(m==='B' && spView==='gap' && !!selSpecies);   // 후보셀은 종별 미발견 뷰에서만
   if(map){ map.setTarget(m==='A'?'map':'mapB'); setTimeout(()=>{ map.updateSize(); sidoLayer&&sidoLayer.changed(); },30); }
 }
 function setMetric(m){ metric=m; mFound.classList.toggle('on',m==='found'); mGap.classList.toggle('on',m==='gap');

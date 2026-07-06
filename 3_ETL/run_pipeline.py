@@ -85,6 +85,20 @@ def step_env_layers():
         need(PROC / f, f)
 
 
+def step_species_cells():
+    """R species_cells.R — obs_points→agref 셀 매핑(cid=env_grid 일치), 종별 점유+최종연도.
+    Sentinel 미접촉(bio01 read만). 진행로그 LOCALAPPDATA/fg_cache/species_cells_run.log."""
+    script = (RDIR / "species_cells.R").as_posix()
+    sh([RSCRIPT, "-e", f"source('{script}')"])
+    need(PROC / "species_cells.csv", "species_cells.csv")
+
+
+def step_cell_sigungu():
+    """env_grid 1km 셀 → 시군구 코드(적합지 비율표·줌 분모). geopandas(build_sigungu_agg 재사용)."""
+    sh([sys.executable, PYDIR / "build_cell_sigungu.py"])
+    need(PROC / "cell_sigungu.csv", "cell_sigungu.csv")
+
+
 def step_ndwi_sp():
     sh([sys.executable, PYDIR / "build_ndwi_species.py"])
     need(PROC / "ndwi_species.csv", "ndwi_species.csv")
@@ -93,6 +107,14 @@ def step_ndwi_sp():
 def step_env_data():
     sh([sys.executable, APP / "build_env_data.py"])
     need(APP / "demo" / "data" / "species_env.js", "species_env.js")
+
+
+def step_gap_data():
+    """발견공백 A 클라 자산 — env_grid.js·cells_<T>.js·gap_meta.js (env_layers·species_cells·cell_sigungu·ndwi_sp 이후)."""
+    import datetime
+    sh([sys.executable, APP / "build_gap_data.py", datetime.date.today().isoformat()])
+    need(APP / "demo" / "data" / "env_grid.js", "env_grid.js")
+    need(APP / "demo" / "data" / "gap_meta.js", "gap_meta.js")
 
 
 def step_dist():
@@ -104,11 +126,15 @@ def step_dist():
 STEPS = [  # 순서 = 의존관계
     ("sentinel", "NDVI/NDWI zip→평문 .tif 캐시(.ovr 제외)", step_sentinel),
     ("env_layers", "env_layers.R (점추출·1km 집계·env_grid·PNG)", step_env_layers),
+    ("species_cells", "species_cells.R (종별 1km 점유+최종연도, cid=env_grid)", step_species_cells),
+    ("cell_sigungu", "build_cell_sigungu.py (셀→시군구 매핑, 비율표 분모)", step_cell_sigungu),
     ("ndwi_sp", "build_ndwi_species.py (어류+저서무척추)", step_ndwi_sp),
     ("env_data", "build_env_data.py (species_env.js·env_meta.js)", step_env_data),
+    ("gap_data", "build_gap_data.py (env_grid.js·cells_<T>.js·gap_meta.js)", step_gap_data),
     ("dist", "build_dist.py --osm-only --out docs (배포본)", step_dist),
 ]
-DEFAULT = ["sentinel", "env_layers", "ndwi_sp", "env_data"]  # dist 는 명시 요청 시만
+# dist 는 명시 요청 시만. 나머지가 발견공백 A 데이터 재빌드 체인.
+DEFAULT = ["sentinel", "env_layers", "species_cells", "cell_sigungu", "ndwi_sp", "env_data", "gap_data"]
 
 
 def main():

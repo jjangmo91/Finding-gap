@@ -14,18 +14,23 @@ BASE = APP.parent
 PROC = BASE / "1_Data" / "processed"
 OUT  = APP / "demo" / "data"
 
-# 표시 5변수: 종카드 막대 순서 + 지도 선택 순서. dec=소수자리(0=정수)
+# 표시 7변수: 종카드 막대 순서 + 지도 선택 순서. dec=소수자리(0=정수)
+# NDVI(정규식생지수)·NDWI(정규수분지수)는 -1~1 무단위. 막대엔 전 종 일괄 표시(모델의 NDWI 종별 적용과 무관).
 VARS = [
     {"key": "bio01", "label": "연평균기온",      "unit": "°C", "type": "temp",   "dec": 1},
     {"key": "bio05", "label": "최난월 최고기온", "unit": "°C", "type": "temp",   "dec": 1},
     {"key": "bio06", "label": "최한월 최저기온", "unit": "°C", "type": "temp",   "dec": 1},
     {"key": "bio12", "label": "연강수량",        "unit": "mm", "type": "precip", "dec": 0},
     {"key": "dem",   "label": "해발고도",        "unit": "m",  "type": "elev",   "dec": 0},
+    {"key": "ndvi",  "label": "정규식생지수",    "unit": "",   "type": "ndvi",   "dec": 2},
+    {"key": "ndwi",  "label": "정규수분지수",    "unit": "",   "type": "ndwi",   "dec": 2},
 ]
 PAL = {
     "temp":   ["#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"],
     "precip": ["#f7fbff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"],
     "elev":   ["#2b7a3d", "#a6d96a", "#ffffbf", "#e0a060", "#8c510a"],
+    "ndvi":   ["#a6611a", "#dfc27d", "#f5f5f5", "#a6d96a", "#1a9641"],
+    "ndwi":   ["#8c510a", "#dfc27d", "#f5f5f5", "#92c5de", "#2166ac"],
 }
 KEYS = [v["key"] for v in VARS]
 DEC  = {v["key"]: v["dec"] for v in VARS}
