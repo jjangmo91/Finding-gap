@@ -54,13 +54,21 @@
   .vintro p{margin:0;color:var(--muted);font-size:13.5px;max-width:64ch;line-height:1.6}
   .vintro p b{color:var(--ink);font-weight:600}
   /* cards */
-  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-  @media(max-width:760px){.cards{grid-template-columns:repeat(2,1fr)}}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  @media(max-width:760px){.cards{grid-template-columns:repeat(2,1fr)}.cards .card.quiz{grid-column:1/-1;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap}}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
   .card .v{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .card .l{font-size:12px;color:var(--muted);margin-top:1px}
   .card .s{font-size:11px;color:var(--faint);margin-top:5px}
   .card.gap .v{color:#b8541f}
+  /* 분류군 퀴즈 진입 카드(누적 관측 옆) */
+  .card.quiz{background:#eef3f1;border-color:#d3e5dd;text-decoration:none;color:inherit;
+    display:flex;flex-direction:column;justify-content:center;
+    transition:border-color .12s,box-shadow .12s,transform .12s}
+  .card.quiz:hover{border-color:var(--accent);box-shadow:0 4px 14px rgba(47,111,94,.12);transform:translateY(-1px)}
+  .card.quiz .qt{font-size:15px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:6px}
+  .card.quiz .ql{font-size:11.5px;color:#4a5a54;margin-top:3px}
+  .card.quiz .qs{font-size:11px;color:var(--accent);font-weight:700;margin-top:7px}
   /* panel */
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:16px}
   .panel h3{margin:0;font-size:14.5px;display:flex;align-items:center;gap:7px}
@@ -188,6 +196,7 @@
 <script src="demo/data/taxa_summary.js"></script>
 <script src="demo/data/species_index.js"></script>
 <script src="demo/data/species_state.js"></script>
+<script src="demo/data/media_meta.js"></script>
 <script>
 /* ── 디자인 토큰(범주색) ── */
 const RL_FILL={EX:'#000000',EW:'#3D2645',RE:'#6B4E71',CR:'#D81E05',EN:'#FC7F3F',
@@ -321,7 +330,12 @@ function renderDash(group){
     <div class="card"><div class="v">${nf(observed)}</div><div class="l">발견 (기록 있음)</div><div class="s">최근10년 ${recent} · 휴면 ${dormant}</div></div>
     <div class="card gap"><div class="v">${nf(none)}</div><div class="l">미발견 (조사자료 관측 0)</div><div class="s">발견공백</div></div>
     <div class="card"><div class="v">${nf(nrec)}</div><div class="l">누적 관측</div><div class="s">고유 좌표 기준</div></div>
+    ${(((window.__SPMEDIA_META__||{}).taxa||{})[group]>=4)?`<a class="card quiz" href="quiz.html?mode=taxon&taxon=${group}">
+      <div class="qt">분류군 퀴즈 <button class="q" data-h="hquiz">?</button></div>
+      <div class="ql">유사종 사진으로 종 익히기</div>
+      <div class="qs">과·속 범위 선택 →</div></a>`:''}
   </div>
+  ${(((window.__SPMEDIA_META__||{}).taxa||{})[group]>=4)?`<div class="help" id="hquiz" hidden style="margin:-6px 0 16px">이 분류군의 종을 <b>유사종 사진과 비교</b>해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 <b>과·속 단위</b>로 범위를 좁힐 수 있어요.</div>`:''}
 
   <div class="panel">
     <h3>전국 발견 현황 <button class="q" data-h="h1">?</button></h3>
@@ -361,16 +375,23 @@ function renderSoon(t){
     ${box(obs,'발견 (조사기록 있음)')}
     ${box(gap,'미발견 (발견공백)')}
     ${box(t.n_records||0,'누적 관측(고유 좌표)')}
+    ${(((window.__SPMEDIA_META__||{}).taxa||{})[t.group]>=4)?`<a class="card quiz" style="flex:1;min-width:132px" href="quiz.html?mode=taxon&taxon=${t.group}">
+      <div class="qt">분류군 퀴즈 <button class="q" data-h="hquiz2">?</button></div>
+      <div class="ql">유사종 사진으로 종 익히기</div>
+      <div class="qs">과·속 범위 선택 →</div></a>`:''}
   </div>
+  ${(((window.__SPMEDIA_META__||{}).taxa||{})[t.group]>=4)?`<div class="help" id="hquiz2" hidden style="margin-top:10px">이 분류군의 종을 <b>유사종 사진과 비교</b>해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 <b>과·속 단위</b>로 범위를 좁힐 수 있어요.</div>`:''}
   <div class="soonbox" style="margin-top:14px">
     <div class="msg">${t.kor} 발견공백을 <b>지도·지역·시기·국가적색목록</b>으로 조회하려면 지도 서비스로 이동하세요. 포유류 상세 대시보드는 위에서 포유류 타일을 선택하면 표시됩니다.</div>
     <a href="service.html?taxon=${t.group}" style="display:inline-block;margin-top:10px;padding:9px 16px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:13px">${t.kor} 지도 서비스 열기 →</a>
   </div>`;
+  bindHelp();
 }
 
 /* ── 도움말 토글 ── */
 function bindHelp(){
-  document.querySelectorAll('#dash .q').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#dash .q').forEach(b=>b.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
     const el=document.getElementById(b.dataset.h); if(el)el.hidden=!el.hidden;});
 }
 

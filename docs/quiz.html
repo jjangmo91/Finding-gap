@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>종 이미지 퀴즈 — Finding gap</title>
+<style>
+  :root{
+    --ink:#1b201d;--muted:#6b7280;--faint:#9aa0a6;--line:#e7e7e2;--bg:#fafaf8;--card:#fff;--accent:#2f6f5e;
+    --success:#5CB85C;--danger:#D81E05;--radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;line-height:1.5}
+  .wrap{max-width:720px;margin:0 auto;padding:28px 16px 72px}
+  a{color:inherit;text-decoration:none}
+  /* ── header (대문·서비스와 동일 결) ── */
+  header{margin-bottom:18px;display:flex;align-items:flex-start;gap:12px;justify-content:space-between}
+  header h1{margin:0 0 4px;font-size:20px;letter-spacing:-.01em}
+  header h1 b{color:var(--accent)}
+  header .sub{margin:0;color:var(--muted);font-size:12.5px;max-width:46ch;line-height:1.5}
+  header .back{flex:none;font-size:12px;color:var(--muted);border:1px solid var(--line);
+    border-radius:9px;padding:7px 12px;background:#fff;white-space:nowrap}
+  header .back:hover{border-color:var(--accent);color:var(--accent)}
+  /* ── score bar (차분하게) ── */
+  .streak-bar{display:flex;gap:8px;margin-bottom:20px}
+  .streak-card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:9px 14px;display:flex;flex-direction:column;gap:2px;flex:1}
+  .streak-card .v{font-size:19px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .streak-card .l{font-size:11.5px;color:var(--muted)}
+  /* ── 퀴즈 범위(과·속) ── */
+  .scope-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-8px 0 18px}
+  .scope-bar[hidden]{display:none}
+  .scope-label{font-size:12px;color:var(--muted);font-weight:600}
+  .scope-sel{appearance:none;border:1px solid var(--line);background:#fff;border-radius:9px;
+    padding:7px 28px 7px 11px;font-size:13px;font-family:inherit;color:var(--ink);cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center}
+  .scope-sel:hover{border-color:var(--accent)}
+  .scope-sel[hidden]{display:none}
+  .scope-count{font-size:11.5px;color:var(--faint)}
+  /* ── taxon picker ── */
+  .taxon-picker{display:none;text-align:center;padding:8px 0 20px}
+  .taxon-picker.active{display:block}
+  .taxon-picker h2{margin:0 0 14px;font-size:15px;color:var(--ink)}
+  .taxon-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+  .taxon-btn{appearance:none;border:1.5px solid var(--line);background:var(--card);
+    border-radius:10px;padding:14px 12px;cursor:pointer;font-size:14px;font-weight:600;
+    transition:all .15s;color:var(--ink);min-height:44px}
+  .taxon-btn:hover{border-color:var(--accent);background:#fafaf8}
+  .taxon-btn:active{transform:scale(.97)}
+  .taxon-btn.disabled{opacity:.4;cursor:default;color:var(--faint)}
+  /* ── quiz container ── */
+  .quiz{display:none}
+  .quiz.active{display:block}
+  .quiz-section{display:none}
+  .quiz-section.active{display:block}
+  .prompt{font-size:13px;color:var(--muted);margin-bottom:10px;font-weight:600}
+  /* image→name */
+  .quiz-image{background:#f1f1ec;border:1px solid var(--line);border-radius:var(--radius);
+    width:100%;aspect-ratio:4/3;object-fit:contain;margin-bottom:8px;display:block}
+  .img-attr{font-size:11px;color:var(--muted);opacity:.85;margin-bottom:16px;line-height:1.4;word-break:keep-all}
+  .options{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+  .option{appearance:none;border:1.5px solid var(--line);background:var(--card);
+    border-radius:10px;padding:15px 16px;cursor:pointer;font-size:15px;font-weight:600;
+    text-align:left;transition:all .12s;font-family:inherit;color:var(--ink);
+    min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .option:hover{border-color:var(--accent);background:#fafaf8}
+  .option:active{transform:scale(.99)}
+  .option .mk{font-size:14px;font-weight:800;opacity:0}
+  .option.correct{border-color:var(--success);background:#f0f9f0;color:#2a6f2a}
+  .option.correct .mk{opacity:1;color:var(--success)}
+  .option.incorrect{border-color:var(--danger);background:#fdf1f0;color:#a23b1a}
+  .option.incorrect .mk{opacity:1;color:var(--danger)}
+  /* name→image */
+  .quiz-name-section{display:none}
+  .quiz-name-section.active{display:block}
+  .quiz-name-box{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;margin-bottom:14px;text-align:center}
+  .quiz-name-box .korean{font-size:22px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+  .quiz-name-box .scientific{font-size:13.5px;color:var(--muted);font-style:italic}
+  .photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:8px}
+  .photo-option{position:relative;cursor:pointer;border:1.5px solid var(--line);
+    border-radius:10px;overflow:hidden;background:#f1f1ec;transition:all .12s;aspect-ratio:1}
+  .photo-option:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .photo-option img{width:100%;height:100%;object-fit:cover;display:block}
+  .photo-attr{font-size:9px;color:#fff;padding:3px 6px;line-height:1.3;word-break:keep-all;
+    background:rgba(0,0,0,.42);position:absolute;bottom:0;left:0;right:0}
+  .photo-option.correct{border-color:var(--success);box-shadow:0 0 0 3px var(--success)}
+  .photo-option.incorrect{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger)}
+  .photo-name{position:absolute;top:0;left:0;right:0;padding:5px 6px;font-size:11px;font-weight:700;
+    background:rgba(27,32,29,.72);color:#fff;text-align:center;word-break:keep-all}
+  .photo-name.is-correct{background:rgba(47,111,94,.92)}
+  /* ── result banner ── */
+  .result-banner{border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:12px;line-height:1.5}
+  .result-banner b{font-weight:800}
+  .result-banner i{font-style:italic;opacity:.85;font-size:13px}
+  .result-banner.ok{background:#f0f9f0;border:1px solid #cfe9cf;color:#2a6f2a}
+  .result-banner.no{background:#fdf1f0;border:1px solid #f2d3cd;color:#a23b1a}
+  .result-banner[hidden]{display:none}
+  /* ── learning card ── */
+  .learning{display:none}
+  .learning.active{display:block}
+  .learning-header{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .species-name{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .species-name .korean{font-size:20px;font-weight:800}
+  .species-name .scientific{font-size:13px;color:var(--muted);font-style:italic}
+  .badges{display:flex;flex-wrap:wrap;gap:6px}
+  .badge{font-size:11px;font-weight:700;border-radius:6px;padding:4px 10px;white-space:nowrap;display:inline-block;
+    background:#eef1ef;color:#33403b}
+  .badge.discovery{background:#eef3f1;color:#2f6f5e}
+  .badge.discovery.dormant{background:#fff8e6;color:#9a7b2e}
+  .badge.discovery.none{background:#fbeeea;color:#a23b1a}
+  .gallery-label{font-size:12px;color:var(--muted);font-weight:600;margin:16px 0 8px}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-bottom:16px}
+  .gallery-item{aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:#f1f1ec;
+    overflow:hidden;cursor:pointer;transition:all .15s;position:relative}
+  .gallery-item:hover{box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .gallery-item img{width:100%;height:100%;object-fit:cover}
+  .gallery-item .item-attr{font-size:9px;color:#fff;padding:3px 4px;line-height:1.2;word-break:keep-all;
+    background:rgba(0,0,0,.42);position:absolute;bottom:0;left:0;right:0}
+  .photo-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;padding:16px;overflow-y:auto}
+  .photo-modal.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .modal-close{position:fixed;top:16px;right:16px;background:#fff;border:0;width:40px;height:40px;
+    border-radius:999px;cursor:pointer;font-size:18px;z-index:101;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .modal-photo{max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;margin-bottom:12px;background:#111}
+  .modal-info{background:var(--card);border-radius:8px;padding:12px;width:100%;max-width:500px}
+  .modal-info .attr{font-size:12px;color:var(--muted);line-height:1.6}
+  .modal-info .link{color:var(--accent);text-decoration:underline}
+  /* info + buttons */
+  .info{background:#f6f7f5;border:1px solid #eceee9;border-radius:10px;padding:12px 14px;
+    font-size:13px;color:#54585a;line-height:1.6;margin-bottom:16px}
+  .info b{color:var(--ink);font-weight:600}
+  .buttons{display:flex;gap:10px}
+  .buttons[hidden]{display:none}
+  .btn{appearance:none;border:0;border-radius:10px;padding:12px 16px;font-size:13.5px;font-weight:600;
+    cursor:pointer;font-family:inherit;min-height:44px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex:1}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.primary:hover{background:#1f5d4f}
+  .btn.primary:active{transform:scale(.98)}
+  .btn.sec{background:#eef1ef;color:#33403b}
+  .btn.sec:hover{background:#e3e8e5}
+  .btn:disabled{opacity:.6;cursor:default}
+  .loading{text-align:center;padding:40px 20px;color:var(--muted)}
+  .loading svg{width:36px;height:36px;animation:spin 1.6s linear infinite;margin-bottom:10px}
+  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  @media(max-width:400px){
+    .wrap{padding:20px 12px 56px}
+    .streak-card{padding:8px 11px}.streak-card .v{font-size:17px}
+    .options{gap:8px}.option{padding:14px;font-size:14px}
+    .species-name .korean{font-size:18px}
+    .gallery{grid-template-columns:repeat(3,1fr)}
+    header h1{font-size:18px}
+    .taxon-buttons{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><b>Finding gap</b> · 종 퀴즈</h1>
+      <p class="sub">유사종 사진을 비교하며 동정 감각을 기르는 연습입니다.</p>
+    </div>
+    <a class="back" id="backLink" href="index.html">← 돌아가기</a>
+  </header>
+
+  <div class="streak-bar">
+    <div class="streak-card"><div class="v" id="current">0</div><div class="l">현재 연속</div></div>
+    <div class="streak-card"><div class="v" id="best">0</div><div class="l">최고 연속</div></div>
+    <div class="streak-card"><div class="v" id="total">0</div><div class="l">풀이한 문제</div></div>
+  </div>
+
+  <!-- 퀴즈 범위: 분류군 안에서 과·속으로 좁히기 -->
+  <div class="scope-bar" id="scopeBar" hidden>
+    <span class="scope-label">퀴즈 범위</span>
+    <select class="scope-sel" id="scopeFamily"></select>
+    <select class="scope-sel" id="scopeGenus" hidden></select>
+    <span class="scope-count" id="scopeCount"></span>
+  </div>
+
+  <!-- Taxon picker -->
+  <section class="taxon-picker" id="taxonPicker">
+    <h2>분류군을 선택하세요</h2>
+    <div class="taxon-buttons" id="taxonButtons"></div>
+  </section>
+
+  <!-- Quiz mode -->
+  <section class="quiz active" id="quizMode">
+    <div class="loading" id="qLoad" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20"></path>
+      </svg>
+      <div>사진을 불러오는 중…</div>
+    </div>
+
+    <!-- Image→Name -->
+    <section class="quiz-section active" id="imageNameSection">
+      <div class="prompt">이 사진 속 종은 무엇일까요?</div>
+      <img class="quiz-image" id="quizImage" alt="문제 이미지">
+      <div class="img-attr" id="quizImageAttr"></div>
+      <div class="options" id="options"></div>
+    </section>
+
+    <!-- Name→Image -->
+    <section class="quiz-name-section" id="nameImageSection">
+      <div class="prompt">아래 종의 사진을 골라 보세요</div>
+      <div class="quiz-name-box">
+        <div class="korean" id="quizNameKorean">—</div>
+        <div class="scientific" id="quizNameScientific">—</div>
+      </div>
+      <div class="photo-grid" id="photoGrid"></div>
+    </section>
+
+    <!-- Shared result + post-answer actions -->
+    <div class="result-banner" id="resultBanner" hidden></div>
+    <div class="buttons" id="postAnswer" hidden>
+      <button class="btn primary" onclick="nextQuiz()">다음 문제 →</button>
+      <button class="btn sec" id="detailBtn">이 종 자세히</button>
+    </div>
+  </section>
+
+  <!-- Learning card -->
+  <section class="learning" id="learningMode">
+    <div class="learning-header">
+      <div class="species-name">
+        <div class="korean" id="learningName">—</div>
+        <div class="scientific" id="learningScientific">—</div>
+      </div>
+      <div class="badges" id="learningBadges"></div>
+    </div>
+    <div class="gallery-label">사진</div>
+    <div class="gallery" id="gallery"></div>
+    <div class="info" id="discoveryInfo"></div>
+    <div class="buttons">
+      <button class="btn primary" onclick="nextQuiz()">다음 문제 →</button>
+      <button class="btn sec" id="backFromLearning">돌아가기</button>
+    </div>
+  </section>
+
+  <div id="loading" class="loading" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20"></path>
+    </svg>
+    <div>불러오는 중…</div>
+  </div>
+</div>
+
+<!-- Photo modal -->
+<div class="photo-modal" id="photoModal">
+  <button class="modal-close" onclick="closePhotoModal()">✕</button>
+  <img class="modal-photo" id="modalPhoto" alt="">
+  <div class="modal-info" id="modalInfo"></div>
+</div>
+
+<script src="demo/data/media_meta.js"></script>
+<script src="demo/data/species_index.js"></script>
+<script src="demo/data/species_state.js"></script>
+<script>
+// ── STATE ──────────────────────────────────────────────────────
+let state = {
+  current: 0,
+  best: parseInt(localStorage.getItem('quiz_best') || '0'),
+  total: parseInt(localStorage.getItem('quiz_total') || '0'),
+  answered: false,
+  currentSpecies: null,
+  currentPhoto: null,
+  mode: null,           // 'taxon' | 'species' | 'picker'
+  taxonGroup: null,
+  fixedKtsn: null,
+  scope: {family:null, genus:null},   // 과·속으로 범위 좁히기(taxon 모드)
+  quizDirection: null,
+};
+const TAXON_LABELS = {
+  'MM':'포유류','AV':'조류','RP':'파충류','AM':'양서류',
+  '-P':'어류','IV':'무척추동물','IN':'곤충','VP':'관속식물','MS':'선태류'
+};
+
+// ── UTIL ───────────────────────────────────────────────────────
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function loadState(){state.best=parseInt(localStorage.getItem('quiz_best')||'0');state.total=parseInt(localStorage.getItem('quiz_total')||'0');state.current=0;updateScoreDisplay();}
+function saveState(){localStorage.setItem('quiz_best',state.best);localStorage.setItem('quiz_total',state.total);}
+function updateScoreDisplay(){document.getElementById('current').textContent=state.current;document.getElementById('best').textContent=state.best;document.getElementById('total').textContent=state.total;}
+
+function parseParams(){
+  const p=new URLSearchParams(location.search);
+  const mode=p.get('mode'),taxon=p.get('taxon'),ktsn=p.get('ktsn');
+  if(mode==='taxon'&&taxon){state.mode='taxon';state.taxonGroup=taxon;
+    state.scope.family=p.get('family')||null;state.scope.genus=p.get('genus')||null;}
+  else if(mode==='species'&&ktsn){state.mode='species';state.fixedKtsn=ktsn;}
+  else state.mode='picker';
+}
+
+// ── DATA QUERIES ───────────────────────────────────────────────
+function speciesById(ktsn){return (window.__SPIDX__||[]).find(s=>s.k===ktsn);}
+function speciesInTaxon(taxon){return (window.__SPIDX__||[]).filter(s=>s.t===taxon);}
+function getMediaForKtsn(ktsn){return ((window.__SPMEDIA__||{}).m||{})[ktsn]||[];}
+function getTaxonomyForKtsn(ktsn){return ((window.__SPMEDIA__||{}).tax||{})[ktsn]||[null,null,null];}
+function getMediaSpeciesInTaxon(taxon){const m=(window.__SPMEDIA__||{}).m||{};return speciesInTaxon(taxon).filter(s=>m[s.k]&&m[s.k].length>0);}
+
+// ── SCOPE: 분류군 안에서 과·속으로 좁히기 ─────────────────────
+function scopeSpecies(){
+  let spp=getMediaSpeciesInTaxon(state.taxonGroup);
+  if(state.scope.family) spp=spp.filter(s=>getTaxonomyForKtsn(s.k)[1]===state.scope.family);
+  if(state.scope.genus)  spp=spp.filter(s=>getTaxonomyForKtsn(s.k)[0]===state.scope.genus);
+  return spp;
+}
+function taxonScopeData(){   // {family_la:{count, genera:{genus_la:count}}}  — 미디어 보유 종 기준
+  const fam={};
+  getMediaSpeciesInTaxon(state.taxonGroup).forEach(s=>{
+    const t=getTaxonomyForKtsn(s.k),g=t[0],f=t[1];
+    if(!f) return;
+    fam[f]=fam[f]||{count:0,genera:{}};fam[f].count++;
+    if(g) fam[f].genera[g]=(fam[f].genera[g]||0)+1;
+  });
+  return fam;
+}
+function updateScopeCount(){document.getElementById('scopeCount').textContent='대상 '+scopeSpecies().length+'종';}
+function restartScopeQuiz(){   // 범위 변경 → 학습카드 닫고 새 문제
+  document.getElementById('learningMode').classList.remove('active');
+  document.getElementById('quizMode').classList.add('active');
+  state.quizDirection=null; showQuiz();
+}
+function buildScopeUI(){
+  const bar=document.getElementById('scopeBar');
+  if(state.mode!=='taxon'){bar.hidden=true;return;}
+  const fam=taxonScopeData();
+  const total=getMediaSpeciesInTaxon(state.taxonGroup).length;
+  const fsel=document.getElementById('scopeFamily'), gsel=document.getElementById('scopeGenus');
+  const fams=Object.keys(fam).filter(f=>fam[f].count>=2).sort((a,b)=>fam[b].count-fam[a].count||a.localeCompare(b));
+  fsel.innerHTML='<option value="">분류군 전체 ('+total+'종)</option>'+
+    fams.map(f=>'<option value="'+f+'">'+f+' ('+fam[f].count+'종)</option>').join('');
+  fsel.value=(state.scope.family&&fam[state.scope.family])?state.scope.family:'';
+  if(!fsel.value) state.scope.family=null;
+  function fillGenus(){
+    const f=fsel.value;
+    if(!f){gsel.hidden=true;gsel.innerHTML='';state.scope.genus=null;return;}
+    const gen=fam[f].genera;
+    const gs=Object.keys(gen).filter(g=>gen[g]>=2).sort((a,b)=>gen[b]-gen[a]||a.localeCompare(b));
+    if(!gs.length){gsel.hidden=true;gsel.innerHTML='';state.scope.genus=null;return;}
+    gsel.innerHTML='<option value="">'+f+' 전체 ('+fam[f].count+'종)</option>'+
+      gs.map(g=>'<option value="'+g+'">'+g+' ('+gen[g]+'종)</option>').join('');
+    gsel.value=(state.scope.genus&&gen[state.scope.genus])?state.scope.genus:'';
+    if(!gsel.value) state.scope.genus=null;
+    gsel.hidden=false;
+  }
+  fillGenus(); updateScopeCount();
+  fsel.onchange=()=>{state.scope.family=fsel.value||null;state.scope.genus=null;fillGenus();updateScopeCount();restartScopeQuiz();};
+  gsel.onchange=()=>{state.scope.genus=gsel.value||null;updateScopeCount();restartScopeQuiz();};
+  bar.hidden=false;
+}
+
+// ── DISTRACTORS (genus→family→order→taxon) ─────────────────────
+function getDistractors(targetKtsn,count=3,preferMedia=true){
+  const target=speciesById(targetKtsn);
+  if(!target) return [];
+  // 범위(과·속)가 설정된 경우: 오답도 그 범위 안에서만 뽑아 유사종 변별에 집중
+  if(state.mode==='taxon' && (state.scope.family||state.scope.genus)){
+    const cand=scopeSpecies().filter(s=>String(s.k)!==String(targetKtsn));
+    shuffle(cand);
+    if(cand.length) return cand.slice(0, Math.min(count, cand.length));
+  }
+  const media=(window.__SPMEDIA__||{}).m||{};
+  const [genus,family,order]=getTaxonomyForKtsn(targetKtsn);
+  let candidates=[];
+  const add=(pred)=>{(window.__SPIDX__||[]).forEach(s=>{
+    if(s.k===targetKtsn)return; if(candidates.find(c=>c.k===s.k))return;
+    if(pred(getTaxonomyForKtsn(s.k),s)) candidates.push(s);
+  });};
+  if(genus) add(t=>t[0]&&t[0]===genus);
+  if(candidates.length<count&&family) add(t=>t[1]&&t[1]===family);
+  if(candidates.length<count&&order) add(t=>t[2]&&t[2]===order);
+  if(candidates.length<count) add((t,s)=>s.t===target.t);
+  if(preferMedia){const withM=candidates.filter(s=>media[s.k]&&media[s.k].length>0);if(withM.length>=count)candidates=withM;}
+  shuffle(candidates);
+  return candidates.slice(0,Math.max(2,count));
+}
+
+// ── DISCOVERY STATUS ───────────────────────────────────────────
+function getDiscoveryStatus(ktsn){const MY=(window.__SPSTATE__||{}).maxyear||{};const y=MY[ktsn];const now=2026;if(y===undefined)return 'none';if(y>=now-10)return 'recent';return 'dormant';}
+function getDiscoveryLabel(s){return s==='recent'?'발견':s==='dormant'?'휴면':'미발견';}
+
+// ── ATTRIBUTION (license compliance) ───────────────────────────
+function licLabel(lic){const m={'cc0':'CC0','cc-by':'CC BY','cc-by-nc':'CC BY-NC','KOGL':'공공누리(KOGL)','KOGL-1':'공공누리 제1유형'};return m[lic]||lic||'';}
+function attrText(p){return (p.by||'')+(p.lic?' · '+licLabel(p.lic):'');}
+
+// ── IMAGE LOADING (프리로드로 깨진 이미지 방지) ────────────────
+function preload(url,timeout=9000){
+  return new Promise(res=>{
+    if(!url){res(false);return;}
+    const im=new Image();let done=false;
+    const t=setTimeout(()=>{if(!done){done=true;res(false);}},timeout);
+    im.onload=()=>{if(!done){done=true;clearTimeout(t);res(true);}};
+    im.onerror=()=>{if(!done){done=true;clearTimeout(t);res(false);}};
+    im.src=url;
+  });
+}
+// 퀴즈용 사진 우선순위: 실제 사진 → 그림/세밀화. 로드되는 첫 사진 반환
+function orderForQuiz(photos){const ph=photos.filter(p=>p.type==='photo');const rest=photos.filter(p=>p.type!=='photo');return [...shuffle(ph),...shuffle(rest)];}
+async function pickLoadablePhoto(photos){for(const p of orderForQuiz(photos||[])){if(await preload(p.full)) return p;}return null;}
+
+function qLoad(on){
+  document.getElementById('qLoad').style.display=on?'':'none';
+  document.getElementById('imageNameSection').style.display=on?'none':'';
+  document.getElementById('nameImageSection').style.display=on?'none':'';
+  if(on){document.getElementById('resultBanner').hidden=true;document.getElementById('postAnswer').hidden=true;}
+}
+function showLoadError(msg){
+  qLoad(false);
+  document.getElementById('imageNameSection').style.display='none';
+  document.getElementById('nameImageSection').style.display='none';
+  const el=document.getElementById('qLoad');
+  el.style.display='';el.innerHTML='<div>'+(msg||'사진을 불러오지 못했습니다.')+'</div>'+
+    '<div style="margin-top:12px"><button class="btn primary" style="max-width:200px;margin:0 auto" onclick="nextQuiz()">다음 문제 →</button></div>';
+}
+
+// ── SPECIES SELECTION ──────────────────────────────────────────
+function getRandomSpeciesForMode(){
+  if(state.mode==='species') return speciesById(state.fixedKtsn);
+  if(state.mode==='taxon'){const ms=scopeSpecies();if(!ms.length)return null;return ms[Math.floor(Math.random()*ms.length)];}
+  const m=(window.__SPMEDIA__||{}).m||{};const ks=Object.keys(m);if(!ks.length)return null;const k=ks[Math.floor(Math.random()*ks.length)];return speciesById(k)||{k,n:'미분류 종',s:k,t:'MM'};
+}
+
+// ── QUIZ: IMAGE→NAME ───────────────────────────────────────────
+async function showImageToNameQuiz(){
+  state.answered=false;
+  document.getElementById('imageNameSection').classList.add('active');
+  document.getElementById('nameImageSection').classList.remove('active');
+  document.getElementById('options').innerHTML='';
+  qLoad(true);
+
+  let sp=null,photo=null,tries=0;
+  while(tries++<8){
+    sp=getRandomSpeciesForMode();
+    if(!sp) break;
+    photo=await pickLoadablePhoto(getMediaForKtsn(sp.k));
+    if(photo) break;
+    if(state.mode==='species') break;   // 고정 종은 재추첨 불가
+  }
+  if(!sp||!photo){showLoadError('이 종의 사진을 표시할 수 없습니다.');return;}
+
+  state.currentSpecies=sp;state.currentPhoto=photo;
+  qLoad(false);
+  const qImg=document.getElementById('quizImage');
+  qImg.alt='문제 이미지';                 // 종명 노출 방지(일반 대체텍스트)
+  qImg.src=photo.full;
+  document.getElementById('quizImageAttr').textContent=attrText(photo);
+
+  const opts=[sp,...getDistractors(sp.k,3,true)];
+  shuffle(opts);
+  const box=document.getElementById('options');
+  opts.forEach(s=>{
+    const btn=document.createElement('button');
+    btn.className='option';
+    btn.dataset.correct=(s.k===sp.k);
+    btn.dataset.ktsn=s.k;
+    btn.innerHTML='<span>'+s.n+'</span><span class="mk"></span>';
+    btn.onclick=()=>answerQuiz(btn,s.k===sp.k,s.k);
+    box.appendChild(btn);
+  });
+}
+
+// ── QUIZ: NAME→IMAGE ───────────────────────────────────────────
+async function showNameToImageQuiz(){
+  state.answered=false;
+  document.getElementById('imageNameSection').classList.remove('active');
+  document.getElementById('nameImageSection').classList.add('active');
+  document.getElementById('photoGrid').innerHTML='';
+  qLoad(true);
+
+  let sp=null,correctPhoto=null,tries=0;
+  while(tries++<8){
+    sp=getRandomSpeciesForMode();
+    if(!sp) break;
+    correctPhoto=await pickLoadablePhoto(getMediaForKtsn(sp.k));
+    if(correctPhoto) break;
+    if(state.mode==='species') break;
+  }
+  if(!sp||!correctPhoto){showLoadError('이 종의 사진을 표시할 수 없습니다.');return;}
+  state.currentSpecies=sp;state.currentPhoto=correctPhoto;
+
+  // 오답 후보 사진도 실제 로드되는 것만 선별(병렬)
+  const distractors=getDistractors(sp.k,3,true);
+  const dPicks=await Promise.all(distractors.map(d=>pickLoadablePhoto(getMediaForKtsn(d.k)).then(p=>({d,p}))));
+  const options=[{ktsn:sp.k,correct:true,photo:correctPhoto}];
+  dPicks.forEach(({d,p})=>{if(p&&options.length<4)options.push({ktsn:d.k,correct:false,photo:p});});
+  shuffle(options);
+
+  qLoad(false);
+  document.getElementById('quizNameKorean').textContent=sp.n;
+  document.getElementById('quizNameScientific').textContent=sp.s||'—';
+
+  const grid=document.getElementById('photoGrid');
+  options.forEach((item,idx)=>{
+    const div=document.createElement('div');
+    div.className='photo-option';
+    div.dataset.correct=item.correct;div.dataset.ktsn=item.ktsn;
+    const img=document.createElement('img');
+    img.src=item.photo.full;
+    img.alt='선택지 '+(idx+1);          // 종명 노출 방지
+    const attr=document.createElement('div');
+    attr.className='photo-attr';attr.textContent=attrText(item.photo);
+    div.appendChild(img);div.appendChild(attr);
+    div.onclick=()=>answerQuiz(div,item.correct,item.ktsn);
+    grid.appendChild(div);
+  });
+}
+
+// ── FLOW ───────────────────────────────────────────────────────
+function showQuiz(){
+  document.getElementById('resultBanner').hidden=true;
+  document.getElementById('postAnswer').hidden=true;
+  if(state.mode==='picker'){showTaxonPicker();return;}
+  if(state.mode==='species'){showNameToImageQuiz();return;}
+  // taxon: 문제마다 방향 무작위(양방향)
+  const dir=Math.random()<0.5?'image_to_name':'name_to_image';
+  if(dir==='image_to_name') showImageToNameQuiz(); else showNameToImageQuiz();
+}
+
+// ── ANSWER ─────────────────────────────────────────────────────
+function answerQuiz(el,correct,ktsn){
+  if(state.answered) return;
+  state.answered=true;
+  const correctK=String(state.currentSpecies.k);
+  const isPhoto=document.getElementById('nameImageSection').classList.contains('active');
+
+  document.querySelectorAll('.option,.photo-option').forEach(b=>{
+    b.style.pointerEvents='none';
+    const isRight=String(b.dataset.correct)==='true'||String(b.dataset.ktsn)===correctK;
+    if(isRight) b.classList.add('correct');       // 정답은 항상 표시
+  });
+  if(!correct) el.classList.add('incorrect');      // 선택한 오답 표시
+
+  // name→image: 채점 후 각 사진에 종명 공개(학습)
+  if(isPhoto){
+    document.querySelectorAll('.photo-option').forEach(po=>{
+      const s=speciesById(po.dataset.ktsn);
+      const lab=document.createElement('div');
+      lab.className='photo-name'+(String(po.dataset.ktsn)===correctK?' is-correct':'');
+      lab.textContent=s?s.n:'';
+      po.appendChild(lab);
+    });
+  }
+
+  if(correct){state.current++;state.best=Math.max(state.best,state.current);}
+  else state.current=0;
+  state.total++;saveState();updateScoreDisplay();
+
+  const sp=state.currentSpecies;
+  const sci=sp.s?' <i>'+sp.s+'</i>':'';
+  const banner=document.getElementById('resultBanner');
+  banner.className='result-banner '+(correct?'ok':'no');
+  banner.innerHTML=(correct?'정답입니다 · 이 종은 ':'오답입니다 · 정답은 ')+'<b>'+sp.n+'</b>'+sci+' 입니다.';
+  banner.hidden=false;
+  document.getElementById('postAnswer').hidden=false;
+}
+
+// ── LEARNING CARD (항상 정답 종) ───────────────────────────────
+function showLearning(ktsn){
+  document.getElementById('quizMode').classList.remove('active');
+  document.getElementById('learningMode').classList.add('active');
+  const sp=speciesById(ktsn)||{k:ktsn,n:'미분류',s:'',t:''};
+  const photos=getMediaForKtsn(ktsn);
+
+  document.getElementById('learningName').textContent=sp.n;
+  document.getElementById('learningScientific').textContent=sp.s||'—';
+
+  const badges=document.getElementById('learningBadges');badges.innerHTML='';
+  if(sp.g){const e=document.createElement('span');e.className='badge';e.textContent='멸종위기 '+sp.g+'급';badges.appendChild(e);}
+  if(sp.r){const e=document.createElement('span');e.className='badge';e.textContent=sp.r;badges.appendChild(e);}
+  const status=getDiscoveryStatus(ktsn);
+  const d=document.createElement('span');d.className='badge discovery '+status;d.textContent=getDiscoveryLabel(status);badges.appendChild(d);
+
+  const g=document.getElementById('gallery');g.innerHTML='';
+  photos.forEach(photo=>{
+    const item=document.createElement('div');item.className='gallery-item';item.onclick=()=>openPhotoModal(photo);
+    const img=document.createElement('img');img.src=photo.thumb;img.alt=sp.n;
+    img.onerror=function(){if(this.src!==photo.full&&photo.full){this.src=photo.full;}else{item.style.display='none';}};
+    item.appendChild(img);
+    const attr=document.createElement('div');attr.className='item-attr';attr.textContent=attrText(photo);
+    item.appendChild(attr);
+    g.appendChild(item);
+  });
+
+  const info=document.getElementById('discoveryInfo');
+  if(status==='none') info.innerHTML='<b>아직 발견되지 않은 종입니다.</b> 이 종을 찾을 수 있는 장소와 시기를 알려주시면 발견공백을 채우는 데 도움이 됩니다.';
+  else if(status==='dormant') info.innerHTML='<b>오랫동안 보고되지 않은 종입니다.</b> 이 종이 아직 살고 있는지 확인하는 것이 중요합니다.';
+  else info.innerHTML='<b>최근에 발견된 종입니다.</b> 분포 현황을 이해하는 데 도움이 되는 추가 관측이 항상 환영합니다.';
+}
+
+// ── TAXON PICKER ───────────────────────────────────────────────
+function showTaxonPicker(){
+  document.getElementById('quizMode').classList.remove('active');
+  document.getElementById('learningMode').classList.remove('active');
+  document.getElementById('taxonPicker').classList.add('active');
+  const box=document.getElementById('taxonButtons');box.innerHTML='';
+  const meta=(window.__SPMEDIA_META__||{}).taxa||{};
+  Object.keys(meta).sort((a,b)=>meta[b]-meta[a]).forEach(taxon=>{
+    const count=meta[taxon]||0;
+    const btn=document.createElement('button');btn.className='taxon-btn';
+    if(count<4){btn.classList.add('disabled');btn.disabled=true;}
+    btn.textContent=TAXON_LABELS[taxon]||taxon;
+    btn.onclick=()=>{if(!btn.disabled){state.mode='taxon';state.taxonGroup=taxon;startQuizForTaxon(taxon);}};
+    box.appendChild(btn);
+  });
+}
+
+// ── PHOTO MODAL ────────────────────────────────────────────────
+function openPhotoModal(photo){
+  document.getElementById('modalPhoto').src=photo.full;
+  document.getElementById('modalInfo').innerHTML=
+    '<div class="attr"><strong>'+(photo.by||'')+'</strong><br>라이선스: '+licLabel(photo.lic)+'<br>'+
+    (photo.link?'<a class="link" href="'+photo.link+'" target="_blank" rel="noopener">원본 보기 →</a>':'')+'</div>';
+  document.getElementById('photoModal').classList.add('active');
+}
+function closePhotoModal(){document.getElementById('photoModal').classList.remove('active');}
+
+// ── NAV ────────────────────────────────────────────────────────
+function nextQuiz(){
+  document.getElementById('learningMode').classList.remove('active');
+  document.getElementById('resultBanner').hidden=true;
+  document.getElementById('postAnswer').hidden=true;
+  const el=document.getElementById('qLoad');el.innerHTML=
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20"></path></svg><div>사진을 불러오는 중…</div>';
+  document.getElementById('quizMode').classList.add('active');
+  showQuiz();
+}
+function goBack(){
+  if(state.mode==='species'&&state.taxonGroup) location.href='service.html?taxon='+state.taxonGroup;
+  else location.href='index.html';
+}
+
+// ── LAZY MEDIA LOAD ────────────────────────────────────────────
+function mediaFile(taxon){return 'demo/data/media_'+String(taxon).replace(/[^A-Za-z0-9]/g,'_')+'.js';}
+function loadTaxonMedia(taxon,cb){
+  if(window.__SPMEDIA__&&window.__SPMEDIA__.t===taxon){cb(true);return;}
+  const s=document.createElement('script');s.src=mediaFile(taxon);
+  s.onload=()=>cb(true);s.onerror=()=>cb(false);document.head.appendChild(s);
+}
+function startQuizForTaxon(taxon){
+  document.getElementById('loading').style.display='';
+  loadTaxonMedia(taxon,ok=>{
+    if(!ok||!window.__SPMEDIA__||window.__SPMEDIA__.t!==taxon){
+      document.getElementById('loading').textContent='이 분류군의 자료를 불러오지 못했습니다.';return;
+    }
+    if(state.mode==='species'&&getMediaForKtsn(state.fixedKtsn).length===0){
+      const sp=speciesById(state.fixedKtsn);
+      document.getElementById('loading').innerHTML=
+        '<div style="max-width:340px;margin:0 auto">'+(sp?(sp.n||sp.s):'이 종')+'은 아직 학습용 사진이 없어요.<br>'+
+        '<a href="quiz.html?mode=taxon&taxon='+taxon+'" style="display:inline-block;margin-top:12px;padding:10px 16px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:600">'+(TAXON_LABELS[taxon]||taxon)+' 퀴즈로 유사종 익히기 →</a></div>';
+      return;
+    }
+    document.getElementById('loading').style.display='none';
+    document.getElementById('taxonPicker').classList.remove('active');
+    document.getElementById('quizMode').classList.add('active');
+    buildScopeUI();
+    showQuiz();
+  });
+}
+
+// ── BOOT ───────────────────────────────────────────────────────
+function boot(){
+  if(!window.__SPIDX__||!window.__SPMEDIA_META__){
+    document.getElementById('loading').style.display='';
+    document.getElementById('loading').textContent='데이터를 불러오지 못했습니다. 로컬 서버로 여세요.';return;
+  }
+  parseParams();loadState();
+  document.getElementById('detailBtn').onclick=()=>{if(state.currentSpecies)showLearning(state.currentSpecies.k);};
+  document.getElementById('backFromLearning').onclick=goBack;
+  document.getElementById('backLink').onclick=(e)=>{e.preventDefault();goBack();};
+
+  if(state.mode==='taxon') startQuizForTaxon(state.taxonGroup);
+  else if(state.mode==='species'){
+    const sp=speciesById(state.fixedKtsn);
+    if(!sp){document.getElementById('loading').style.display='';document.getElementById('loading').textContent='종을 찾을 수 없습니다.';return;}
+    state.taxonGroup=sp.t;startQuizForTaxon(sp.t);
+  } else {document.getElementById('loading').style.display='none';showTaxonPicker();}
+}
+
+document.addEventListener('keydown',e=>{if(state.answered&&(e.key==='Enter'||e.key===' ')){e.preventDefault();nextQuiz();}});
+document.getElementById('photoModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closePhotoModal();});
+boot();
+</script>
+</body>
+</html>

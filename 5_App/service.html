@@ -236,6 +236,7 @@
 <script src="demo/data/obs_meta.js"></script>
 <script src="demo/data/species_index.js"></script>
 <script src="demo/data/env_meta.js"></script>
+<script src="demo/data/media_meta.js"></script>
 <script>
 /* ── 토큰·상수 ── */
 const RL_FILL={EX:'#000',EW:'#3D2645',RE:'#6B4E71',CR:'#D81E05',EN:'#FC7F3F',VU:'#F2DC00',NT:'#C3D838',LC:'#5CB85C',DD:'#CFCFC4',NENA:'#E6E6DE'};
@@ -902,6 +903,7 @@ function renderSpecies(sp){
       <div class="links">
         <a class="lk primary" href="${NIBR(sp.k)}" target="_blank" rel="noopener noreferrer"><span><span class="t">한반도의 생물다양성</span><br><span class="d">국립생물자원관 종 상세 →</span></span></a>
         ${reportLink}
+        ${(((window.__SPMEDIA_META__||{}).taxa||{})[sp.t]>=4)?`<a class="lk" href="quiz.html?mode=species&ktsn=${sp.k}"><span><span class="t">이 종 동정 연습</span><br><span class="d">유사종 사진과 비교하는 퀴즈 →</span></span></a>`:''}
       </div>
       <div class="muted" style="margin-top:8px">${eg?'멸종위기 야생생물 — 관찰 시 Naturing 제보 프로젝트로':'일반종 — 관찰 자료는 EcoBank로 제보'}</div>
     </div>
