@@ -317,7 +317,9 @@ function speciesById(ktsn){return (window.__SPIDX__||[]).find(s=>s.k===ktsn);}
 function speciesInTaxon(taxon){return (window.__SPIDX__||[]).filter(s=>s.t===taxon);}
 function getMediaForKtsn(ktsn){return ((window.__SPMEDIA__||{}).m||{})[ktsn]||[];}
 function getTaxonomyForKtsn(ktsn){return ((window.__SPMEDIA__||{}).tax||{})[ktsn]||[null,null,null];}
-function getMediaSpeciesInTaxon(taxon){const m=(window.__SPMEDIA__||{}).m||{};return speciesInTaxon(taxon).filter(s=>m[s.k]&&m[s.k].length>0);}
+function hasPhoto(ktsn){const r=((window.__SPMEDIA__||{}).m||{})[ktsn];return !!(r&&r.some(x=>x.type==='photo'));}
+// 퀴즈 풀은 사진(photo) 보유 종만 — 표본·세밀화뿐인 종은 무작위 출제서 제외(무척추·곤충 로딩 안정화)
+function getMediaSpeciesInTaxon(taxon){return speciesInTaxon(taxon).filter(s=>hasPhoto(s.k));}
 
 // ── SCOPE: 분류군 안에서 과·속으로 좁히기 ─────────────────────
 function scopeSpecies(){
@@ -449,7 +451,7 @@ function getDistractors(targetKtsn,count=3,preferMedia=true){
   if(candidates.length<count&&family) add(t=>t[1]&&t[1]===family);
   if(candidates.length<count&&order) add(t=>t[2]&&t[2]===order);
   if(candidates.length<count) add((t,s)=>s.t===target.t);
-  if(preferMedia){const withM=candidates.filter(s=>media[s.k]&&media[s.k].length>0);if(withM.length>=count)candidates=withM;}
+  if(preferMedia){const withM=candidates.filter(s=>hasPhoto(s.k));if(withM.length>=count)candidates=withM;}
   shuffle(candidates);
   return candidates.slice(0,Math.max(2,count));
 }

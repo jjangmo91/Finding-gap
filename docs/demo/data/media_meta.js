@@ -1,1 +1,1 @@
-window.__SPMEDIA_META__={"generated":"2026-07-08","taxa":{"-P":429,"AM":21,"AV":296,"IN":5,"IV":4,"MM":61,"RP":21,"VP":3503}};
+window.__SPMEDIA_META__={"generated":"2026-07-12","taxa":{"-P":429,"AM":21,"AV":296,"IN":8116,"IV":4280,"MM":61,"MS":480,"RP":21,"VP":3503}};

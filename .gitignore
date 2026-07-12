@@ -28,6 +28,8 @@ id_rsa*
 5_App/config.js
 
 # ---- Data: 대용량 원천·중간산출은 버전관리 제외 ----
+# 미디어 병합 디버그본(비서빙·대용량) — 서빙은 분류군별 media_<T>.js. 디버그 json은 추적 제외
+5_App/demo/data/species_media.json
 1_Data/raw/**
 !1_Data/raw/.gitkeep
 1_Data/processed/**
