@@ -130,6 +130,72 @@ def test_taxa_summary_has_protected_fields():
     assert sum(t["endangered"] for t in ts) == 277    # 멸종위기 I(67)+II(210)
 
 
+def test_get_interest_structure():
+    k = tools.search_species("수달")[0]["ktsn"]
+    r = tools.get_interest(k)
+    assert 0.0 <= r["interest"] <= 1.0
+    assert 0.0 <= r["interest_occ"] <= 1.0
+    assert r["stratum"]["taxon_group"] == "MM"
+    assert r["stratum"]["n"] >= 1 and r["stratum"]["rank"] >= 1
+
+
+def test_interest_ranking_species_sorted():
+    r = tools.interest_ranking(taxon_group="MM", limit=10)
+    assert r["level"] == "species" and r["species"]
+    vals = [s["interest"] for s in r["species"]]
+    assert vals == sorted(vals, reverse=True)          # 내림차순
+    assert all("interest" in s for s in r["species"])
+
+
+def test_interest_ranking_taxon_level():
+    r = tools.interest_ranking(level="taxon")
+    assert r["level"] == "taxon"
+    assert any(t["taxon_group"] == "MM" for t in r["taxa"])
+    for t in r["taxa"]:
+        assert 0.0 <= t["mean_interest"] <= 1.0
+
+
+def test_interest_bounds_and_user_zero():
+    # 3신호 가중(적용신호 재정규화) → interest 0~1 전 범위. watchlist 미수집 → interest_user 전 종 0.
+    import sqlite3
+    from pathlib import Path
+    dbp = Path(tools.db.DB)
+    con = sqlite3.connect(dbp)
+    mn, mx = con.execute("SELECT MIN(interest), MAX(interest) FROM species").fetchone()
+    nuser = con.execute("SELECT COUNT(*) FROM species WHERE interest_user>0").fetchone()[0]
+    active = con.execute("SELECT value FROM meta WHERE key='interest_user_active'").fetchone()[0]
+    con.close()
+    assert mn >= 0.0 and mx <= 1.0001
+    assert nuser == 0 and active == "0"                 # 현재 사용자 관심종 0
+
+
+def test_interest_wiki_ko_only():
+    # 위키 신호(interest_wiki NOT NULL)=한국어 문서 보유종=meta.interest_wiki_species. ko 조회수>0 ⊆ 문서보유.
+    import sqlite3
+    from pathlib import Path
+    con = sqlite3.connect(Path(tools.db.DB))
+    n_col = con.execute("SELECT COUNT(*) FROM species WHERE interest_wiki IS NOT NULL").fetchone()[0]
+    meta_n = int(con.execute("SELECT value FROM meta WHERE key='interest_wiki_species'").fetchone()[0])
+    n_ko_view = con.execute("SELECT COUNT(*) FROM species WHERE wiki_ko>0").fetchone()[0]
+    con.close()
+    assert n_col == meta_n
+    assert 1500 <= n_col <= 6000                         # 한국어 위키 문서 보유 ~2,574
+    assert n_ko_view <= n_col                            # 조회수>0 ⊆ 문서보유
+
+
+def test_get_interest_wiki_split():
+    k = tools.search_species("수달")[0]["ktsn"]
+    r = tools.get_interest(k)
+    wp = r.get("wiki_pageviews")
+    assert wp and wp["scored"] == "ko"                  # 점수엔 ko만
+    assert wp["ko_12mo"] >= 0 and wp["global_en_12mo"] >= 0
+
+
+def test_search_output_has_interest():
+    r = tools.search_species("수달")
+    assert r and "interest" in r[0]
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

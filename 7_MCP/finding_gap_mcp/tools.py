@@ -10,7 +10,7 @@ from . import db
 
 DISCOVERY_WINDOW = 10
 _SP_COLS = ("ktsn,korean_name,scientific_name,taxon_group,taxon_group_kor,"
-            "endangered_grade,national_redlist_category,has_media")
+            "endangered_grade,national_redlist_category,has_media,interest")
 
 
 def _ref_year():
@@ -160,7 +160,8 @@ def search_species(query, taxon_group=None, limit=10, endangered_grade=None, red
 def get_species(ktsn):
     """종 상세 — 마스터 정보 + 전국 발견 상태 요약 + 환경/미디어 가용성."""
     ktsn = str(ktsn).strip()
-    sp = db.one(f"SELECT {_SP_COLS},class_la,order_la,family_la,genus_la,rank FROM species WHERE ktsn=?", (ktsn,))
+    sp = db.one(f"SELECT {_SP_COLS},interest_occ,interest_wiki,interest_user,stratum_n,interest_fallback,"
+                "class_la,order_la,family_la,genus_la,rank FROM species WHERE ktsn=?", (ktsn,))
     if not sp:
         return {"error": f"종을 찾을 수 없습니다: ktsn={ktsn}"}
     sp["has_media"] = bool(sp["has_media"])
@@ -318,6 +319,53 @@ def get_species_media(ktsn, media_type=None, limit=20):
     media = db.rows(sql, params)
     return {"ktsn": ktsn, "count": len(media), "media": media,
             "license_note": "비상업 용도. iNat 사진은 귀속(attribution) 표기 필수(CC-BY/-NC)."}
+
+
+def get_interest(ktsn):
+    """종의 관심도(Interest) 상세 — 층(분류군×적색목록등급) 내 백분위 신호와 층 내 순위.
+    신호: P_occ(관측기록수)·P_wiki(한국어 위키백과 조회수)·P_user(관심종 watchlist).
+    interest = 적용 신호의 가중평균(occ0.5/wiki0.2/user0.3, 결측 신호 몫은 재정규화). 점수엔 ko 조회수만(en=전세계는 참고). 문헌: conservation culturomics."""
+    ktsn = str(ktsn).strip()
+    sp = db.one(
+        "SELECT ktsn,korean_name,scientific_name,taxon_group,taxon_group_kor,national_redlist_category,"
+        "interest,interest_occ,interest_wiki,interest_user,wiki_ko,wiki_en,stratum_n,interest_fallback "
+        "FROM species WHERE ktsn=?", (ktsn,))
+    if not sp:
+        return {"error": f"종을 찾을 수 없습니다: ktsn={ktsn}"}
+    sp["interest_fallback"] = bool(sp["interest_fallback"])
+    strat = sp["national_redlist_category"] or ""
+    rk = db.one("SELECT COUNT(*) n, SUM(CASE WHEN interest>? THEN 1 ELSE 0 END) above "
+                "FROM species WHERE taxon_group=? AND national_redlist_category=?",
+                (sp["interest"], sp["taxon_group"], strat))
+    m = db.meta()
+    sp["stratum"] = {"taxon_group": sp["taxon_group"], "redlist_category": strat or "none",
+                     "n": rk["n"], "rank": (rk["above"] or 0) + 1}
+    sp["wiki_pageviews"] = {"ko_12mo": sp.pop("wiki_ko"), "global_en_12mo": sp.pop("wiki_en"), "scored": "ko"}
+    sp["weights"] = m.get("interest_weights")
+    sp["definition"] = m.get("interest_definition")
+    sp["note"] = ("층 내 백분위(0~1). 신호↑=관심↑. 점수엔 한국어 위키(ko)만 반영, en(전세계)은 참고. "
+                  "위키 문서 없는 종은 관측(occ)만으로, 사용자 관심종 미수집 시 그 몫은 재정규화.")
+    return sp
+
+
+def interest_ranking(taxon_group=None, redlist_category=None, level="species", limit=20):
+    """관심도 순위. level='species'(종별 상위) 또는 'taxon'(분류군별 평균). taxon_group·redlist_category로 층 한정."""
+    limit = max(1, min(int(limit), 200))
+    sw, swp = _species_where(taxon_group, None, redlist_category)
+    if str(level).lower() == "taxon":
+        rows = db.rows(
+            "SELECT taxon_group, taxon_group_kor, COUNT(*) n, "
+            "ROUND(AVG(interest),4) mean_interest, ROUND(AVG(interest_occ),4) mean_occ, "
+            "ROUND(AVG(CASE WHEN interest_wiki IS NOT NULL THEN interest_wiki END),4) mean_wiki "
+            f"FROM species WHERE 1=1{sw} GROUP BY taxon_group ORDER BY mean_interest DESC", swp)
+        return {"level": "taxon", "redlist_category": redlist_category, "taxa": rows}
+    rows = db.rows(
+        f"SELECT {_SP_COLS} FROM species WHERE 1=1{sw} ORDER BY interest DESC, korean_name LIMIT ?",
+        swp + [limit])
+    for r in rows:
+        r["has_media"] = bool(r["has_media"])
+    return {"level": "species", "taxon_group": taxon_group, "redlist_category": redlist_category,
+            "count": len(rows), "species": rows}
 
 
 def find_region(name=None, level=None):

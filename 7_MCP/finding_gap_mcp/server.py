@@ -74,6 +74,18 @@ def get_species_media(ktsn: str, media_type: str = "", limit: int = 20) -> dict:
 
 
 @mcp.tool()
+def get_interest(ktsn: str) -> dict:
+    """종의 관심도(Interest) 상세 — 층(분류군×적색목록등급) 내 백분위 신호(관측기록수·한국어 위키조회수·사용자관심종)와 층 내 순위. interest=적용신호 가중평균(occ0.5/wiki0.2/user0.3, 결측 몫 재정규화). 점수엔 한국어 위키(ko)만, en=전세계는 참고. 문헌: conservation culturomics(위키 조회수=대중 관심)."""
+    return tools.get_interest(ktsn)
+
+
+@mcp.tool()
+def interest_ranking(taxon_group: str = "", redlist_category: str = "", level: str = "species", limit: int = 20) -> dict:
+    """관심도 순위. level='species'(종별 상위) 또는 'taxon'(분류군별 평균). taxon_group·redlist_category(CR/EN/…)로 층 한정 — 예: 적색목록 CR 곤충 중 관심도 상위."""
+    return tools.interest_ranking(taxon_group or None, redlist_category or None, level, limit)
+
+
+@mcp.tool()
 def find_region(name: str = "", level: str = "") -> dict:
     """행정구역 이름으로 코드 찾기(다른 도구의 region 입력용). level='sido'|'sigungu' 로 제한 가능."""
     return tools.find_region(name or None, level or None)
