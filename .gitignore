@@ -30,6 +30,11 @@ id_rsa*
 # ---- Data: 대용량 원천·중간산출은 버전관리 제외 ----
 # 미디어 병합 디버그본(비서빙·대용량) — 서빙은 분류군별 media_<T>.js. 디버그 json은 추적 제외
 5_App/demo/data/species_media.json
+# 발견공백 MCP: gz(fg_mcp.sqlite.gz)만 커밋 — 해제본 sqlite(캐시)·venv 는 제외
+7_MCP/data/fg_mcp.sqlite
+7_MCP/.venv/
+# 로컬 MCP 등록(머신별 절대경로) — 템플릿(.mcp.json.example)만 커밋
+.mcp.json
 1_Data/raw/**
 !1_Data/raw/.gitkeep
 1_Data/processed/**

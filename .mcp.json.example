@@ -1,0 +1,11 @@
+{
+  "//": "발견공백 MCP 등록 템플릿. 이 파일을 .mcp.json 으로 복사 후 command 를 mcp 설치된 파이썬으로 지정.",
+  "//command": "전용 venv 사용 시 절대경로: <repo>/7_MCP/.venv/Scripts/python.exe (Windows) 또는 .../bin/python",
+  "mcpServers": {
+    "finding-gap": {
+      "command": "python",
+      "args": ["-m", "finding_gap_mcp"],
+      "cwd": "7_MCP"
+    }
+  }
+}

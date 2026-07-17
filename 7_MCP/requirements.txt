@@ -1,0 +1,4 @@
+# 발견공백 MCP 서버 런타임 의존성(서버는 stdlib sqlite3/gzip + mcp 만 사용)
+mcp>=1.2.0
+# 데이터 빌드(build_mcp_data.py)만 pandas 필요 — 서버 실행엔 불필요:
+# pandas>=2.0
