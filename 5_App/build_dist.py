@@ -19,7 +19,7 @@ DIST = BASE / "6_Deliverables" / "dist"
 DATA = APP / "demo" / "data"
 
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
-PAGES = ["index.html", "service.html", "fg_supabase.js", "quiz.html"]
+PAGES = ["index.html", "service.html", "fg_supabase.js", "fg_analytics.js", "quiz.html"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
               "species_index.js", "species_state.js", "sido.geojson", "sigungu.geojson",
               "env_meta.js", "species_env.js",
@@ -96,10 +96,12 @@ def main():
     key = "" if osm_only else env_val("VWORLD_KEY")
     sb_url = "" if no_supabase else env_val("SUPABASE_URL")
     sb_key = "" if no_supabase else env_val("SUPABASE_KEY")   # publishable 키(공개 전제·RLS 보호)
+    ga4 = env_val("GA4_MEASUREMENT_ID")                       # GA4 측정 ID(G-XXXX). 없으면 빈값=분석 미로드
     (DIST / "config.js").write_text(
         f'window.VWORLD_KEY = "{key}";\n'
         f'window.SUPABASE_URL = "{sb_url}";\n'
-        f'window.SUPABASE_KEY = "{sb_key}";\n', encoding="utf-8")
+        f'window.SUPABASE_KEY = "{sb_key}";\n'
+        f'window.GA4_ID = "{ga4}";\n', encoding="utf-8")
     (DIST / "_headers").write_text(HEADERS, encoding="utf-8")
 
     total = sum(p.stat().st_size for p in DIST.rglob("*") if p.is_file())

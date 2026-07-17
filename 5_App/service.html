@@ -316,6 +316,7 @@
   .watchbtn:disabled{opacity:.6;cursor:default}
 </style>
 <script src="config.js" onerror="window.VWORLD_KEY=window.VWORLD_KEY||''"></script>
+<script src="fg_analytics.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
 <script src="demo/data/taxa_summary.js"></script>
 <script src="demo/data/obs_meta.js"></script>
@@ -963,6 +964,7 @@ function envBars(sp){                                     // 발견지점 기후
 }
 function renderSpecies(sp){
   selSpecies=sp;
+  window.fgTrack&&fgTrack('species_open',{ktsn:sp.k,taxon:sp.t});
   selRegions=speciesRegions(sp,sy0,sy1);                  // 지도 강조용(활성 레벨)
   const eg=isEndangered(sp.g);
   const envHtml=envBars(sp);                              // 기후·지형 지위 막대(데이터 있을 때만)
@@ -1017,6 +1019,7 @@ function openSpecies(k){
 /* ── 모드 전환 ── */
 function setMode(m){
   mapMode=m;
+  window.fgTrack&&fgTrack('mode_switch',{mode:m});
   tabA.classList.toggle('on',m==='A'); tabB.classList.toggle('on',m==='B');
   modeA.style.display=m==='A'?'':'none'; modeB.style.display=m==='B'?'':'none';
   if(gapLayer) gapLayer.setVisible(m==='B' && spView==='gap' && !!selSpecies);   // 후보셀은 종별 미발견 뷰에서만

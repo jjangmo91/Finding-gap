@@ -273,6 +273,8 @@
   <div class="modal-info" id="modalInfo"></div>
 </div>
 
+<script src="config.js" onerror="window.GA4_ID=window.GA4_ID||''"></script>
+<script src="fg_analytics.js"></script>
 <script src="demo/data/media_meta.js"></script>
 <script src="demo/data/species_index.js"></script>
 <script src="demo/data/species_state.js"></script>
@@ -601,6 +603,7 @@ function showQuiz(){
 function answerQuiz(el,correct,ktsn){
   if(state.answered) return;
   state.answered=true;
+  window.fgTrack&&fgTrack('quiz_answer',{correct:!!correct,taxon:state.taxonGroup||'',mode:state.mode||''});
   const correctK=String(state.currentSpecies.k);
   const isPhoto=document.getElementById('nameImageSection').classList.contains('active');
 
@@ -718,6 +721,7 @@ function loadTaxonMedia(taxon,cb){
   s.onload=()=>cb(true);s.onerror=()=>cb(false);document.head.appendChild(s);
 }
 function startQuizForTaxon(taxon){
+  window.fgTrack&&fgTrack('quiz_start',{taxon:taxon,mode:state.mode||'taxon'});
   document.getElementById('loading').style.display='';
   loadTaxonMedia(taxon,ok=>{
     if(!ok||!window.__SPMEDIA__||window.__SPMEDIA__.t!==taxon){
