@@ -41,10 +41,100 @@ def _region_name(code):
     return (r["name"], r["level"]) if r else (None, "sido" if len(str(code)) == 2 else "sigungu")
 
 
+# ── 멸종위기·적색목록 필터 ──
+_THREAT_REDLIST = ("CR", "EN", "VU", "NT")     # 위협 범주(멸종위기 후보) — 보호종 기본 필터에 사용
+
+
+def _as_list(v):
+    if v is None:
+        return []
+    if isinstance(v, str):
+        return [x for x in (p.strip() for p in v.replace(";", ",").split(",")) if x]
+    return [str(x).strip() for x in v if str(x).strip()]
+
+
+def _norm_grade(v):
+    """멸종위기 등급 정규화 → ['I','II']. '1'/'2'/'1급'/'II급' 등 허용."""
+    out = []
+    for x in _as_list(v):
+        x = x.upper().replace("급", "").strip()
+        out.append({"1": "I", "2": "II"}.get(x, x))
+    return out
+
+
+def _norm_redlist(v):
+    """국가적색목록 범주 정규화 → ['CR','EN',...] (대문자)."""
+    return [x.upper() for x in _as_list(v)]
+
+
+def _species_where(taxon_group=None, endangered_grade=None, redlist_category=None, pfx="", protected=False):
+    """species 테이블 필터 절(taxon·등급·적색목록). pfx='s.' 조인 시. protected=True면 등급/범주 미지정 시 위협종 기본."""
+    clause, params = "", []
+    if taxon_group:
+        clause += f" AND {pfx}taxon_group=?"
+        params.append(taxon_group)
+    g = _norm_grade(endangered_grade)
+    if g:
+        clause += f" AND {pfx}endangered_grade IN ({','.join('?' * len(g))})"
+        params += g
+    r = _norm_redlist(redlist_category)
+    if r:
+        clause += f" AND {pfx}national_redlist_category IN ({','.join('?' * len(r))})"
+        params += r
+    if protected and not g and not r:
+        clause += (f" AND ({pfx}endangered_grade!='' OR {pfx}national_redlist_category "
+                   f"IN ({','.join('?' * len(_THREAT_REDLIST))}))")
+        params += list(_THREAT_REDLIST)
+    return clause, params
+
+
+def _region_gap(col, code, name, level, sw, swp, state, limit, cutoff):
+    """지역×종필터(sw/swp) 발견 분류 공용 로직 — find_gap_by_region·list_protected_species 공유."""
+    recorded = db.rows(
+        "SELECT sr.ktsn, MAX(sr.maxyear) my, SUM(sr.obs_count) oc "
+        "FROM species_region sr JOIN species s ON s.ktsn=sr.ktsn "
+        f"WHERE sr.{col}=?{sw} GROUP BY sr.ktsn", [code] + swp)
+    found = sum(1 for r in recorded if r["my"] and r["my"] >= cutoff)
+    dormant = len(recorded) - found
+    total = db.one(f"SELECT COUNT(*) c FROM species s WHERE 1=1{sw}", swp)["c"]
+    summary = {"total": total, "found": found, "dormant": dormant,
+               "undiscovered": total - len(recorded), "recorded": len(recorded)}
+    state = (state or "undiscovered").lower()
+    species, truncated = [], False
+    if state == "undiscovered":
+        species = db.rows(
+            f"SELECT {_SP_COLS} FROM species s WHERE 1=1{sw} "
+            f"AND s.ktsn NOT IN (SELECT ktsn FROM species_region WHERE {col}=?) "
+            "ORDER BY (s.endangered_grade!='') DESC, s.korean_name LIMIT ?",
+            swp + [code, limit + 1])
+    else:
+        rec_map = {r["ktsn"]: r for r in recorded}
+        want = [k for k, r in rec_map.items()
+                if state == "recorded"
+                or (state == "found" and r["my"] and r["my"] >= cutoff)
+                or (state == "dormant" and not (r["my"] and r["my"] >= cutoff))][:limit + 1]
+        if want:
+            ph = ",".join("?" * len(want))
+            spmap = {r["ktsn"]: r for r in db.rows(f"SELECT {_SP_COLS} FROM species WHERE ktsn IN ({ph})", want)}
+            for k in want:
+                if k in spmap:
+                    r = dict(spmap[k]); r["maxyear"] = rec_map[k]["my"]; r["obs_count"] = rec_map[k]["oc"]
+                    r["discovery_state"] = _state(rec_map[k]["my"], cutoff)
+                    species.append(r)
+    if len(species) > limit:
+        species, truncated = species[:limit], True
+    for r in species:
+        if "has_media" in r:
+            r["has_media"] = bool(r["has_media"])
+    return {"region": code, "region_name": name, "level": level,
+            "reference_year": _ref_year(), "discovery_cutoff": cutoff,
+            "summary": summary, "state": state, "species": species, "truncated": truncated}
+
+
 # ─────────────────────────── 도구 ───────────────────────────
 
-def search_species(query, taxon_group=None, limit=10):
-    """국명·학명으로 종을 검색한다. 부분일치(대소문자 무시)."""
+def search_species(query, taxon_group=None, limit=10, endangered_grade=None, redlist_category=None):
+    """국명·학명으로 종을 검색한다. 부분일치(대소문자 무시). endangered_grade(I/II)·redlist_category(CR/EN/VU/NT/LC/DD/NA) 필터 가능."""
     q = str(query).strip().lower()
     if not q:
         return []
@@ -52,9 +142,9 @@ def search_species(query, taxon_group=None, limit=10):
     pref = f"{q}%"
     where = "(lower(korean_name) LIKE ? OR lower(scientific_name) LIKE ?)"
     params = [like, like]
-    if taxon_group:
-        where += " AND taxon_group=?"
-        params.append(taxon_group)
+    sw, swp = _species_where(taxon_group, endangered_grade, redlist_category)
+    where += sw
+    params += swp
     limit = max(1, min(int(limit), 100))
     sql = (f"SELECT {_SP_COLS} FROM species WHERE {where} "
            "ORDER BY CASE WHEN lower(korean_name) LIKE ? THEN 0 "
@@ -94,77 +184,58 @@ def get_species(ktsn):
     return sp
 
 
-def _scope_total(taxon_group):
-    if taxon_group:
-        return db.one("SELECT COUNT(*) c FROM species WHERE taxon_group=?", (taxon_group,))["c"]
-    return db.one("SELECT COUNT(*) c FROM species")["c"]
-
-
-def find_gap_by_region(region, taxon_group=None, state="undiscovered", limit=50):
-    """지역(시도 2자리·시군구 5자리)의 발견/휴면/미발견 종을 분류. summary + 요청 state 종목록(상한)."""
+def find_gap_by_region(region, taxon_group=None, state="undiscovered", limit=50,
+                       endangered_grade=None, redlist_category=None):
+    """지역(시도 2자리·시군구 5자리)의 발견/휴면/미발견 종을 분류. summary + 요청 state 종목록(상한). endangered_grade·redlist_category 필터 가능."""
     col, code = _region_col(region)
     name, level = _region_name(code)
     cutoff = _cutoff()
     limit = max(1, min(int(limit), 500))
+    sw, swp = _species_where(taxon_group, endangered_grade, redlist_category, pfx="s.")
+    out = _region_gap(col, code, name, level, sw, swp, state, limit, cutoff)
+    out["taxon_group"] = taxon_group
+    if endangered_grade or redlist_category:
+        out["filter"] = {"endangered_grade": endangered_grade, "redlist_category": redlist_category}
+    return out
 
-    tclause = " AND taxon_group=?" if taxon_group else ""
-    tparam = [taxon_group] if taxon_group else []
 
-    # 지역 내 종별 최신연도(시도면 시군구들 롤업)
-    sub = (f"SELECT ktsn, MAX(maxyear) my, SUM(obs_count) oc FROM species_region "
-           f"WHERE {col}=?{tclause} GROUP BY ktsn")
-    recorded = db.rows(sub, [code] + tparam)
-    found = sum(1 for r in recorded if r["my"] and r["my"] >= cutoff)
-    dormant = len(recorded) - found
-    total = _scope_total(taxon_group)
-    undiscovered = total - len(recorded)
-
-    summary = {"total": total, "found": found, "dormant": dormant,
-               "undiscovered": undiscovered, "recorded": len(recorded)}
-
-    state = (state or "undiscovered").lower()
-    species = []
-    truncated = False
-    if state == "undiscovered":
-        sql = (f"SELECT {_SP_COLS} FROM species s WHERE 1=1{(' AND taxon_group=?' if taxon_group else '')} "
-               f"AND ktsn NOT IN (SELECT ktsn FROM species_region WHERE {col}=?) "
-               "ORDER BY (endangered_grade!='') DESC, korean_name LIMIT ?")
-        params = tparam + [code, limit + 1]
-        species = db.rows(sql, params)
-    else:  # found / dormant / recorded
-        rec_map = {r["ktsn"]: r for r in recorded}
-        want = [k for k, r in rec_map.items()
-                if state == "recorded"
-                or (state == "found" and r["my"] and r["my"] >= cutoff)
-                or (state == "dormant" and not (r["my"] and r["my"] >= cutoff))]
-        want = want[:limit + 1]
-        if want:
-            ph = ",".join("?" * len(want))
-            sp = {r["ktsn"]: r for r in db.rows(f"SELECT {_SP_COLS} FROM species WHERE ktsn IN ({ph})", want)}
-            for k in want:
-                if k in sp:
-                    r = dict(sp[k]); r["maxyear"] = rec_map[k]["my"]; r["obs_count"] = rec_map[k]["oc"]
-                    r["discovery_state"] = _state(rec_map[k]["my"], cutoff)
-                    species.append(r)
-    if len(species) > limit:
-        species = species[:limit]
-        truncated = True
+def list_protected_species(region=None, endangered_grade=None, redlist_category=None, state=None, limit=50):
+    """멸종위기종·국가적색목록 종 목록. 등급/범주 미지정 시 위협종(멸종위기 I/II 또는 적색목록 CR/EN/VU/NT) 기본.
+    region 지정 시 해당 지역의 발견/휴면/미발견(state) 분류 — 예: 종로구 미발견 멸종위기 I급."""
+    cutoff = _cutoff()
+    limit = max(1, min(int(limit), 500))
+    is_default = not (_norm_grade(endangered_grade) or _norm_redlist(redlist_category))
+    if region:
+        col, code = _region_col(region)
+        name, level = _region_name(code)
+        sw, swp = _species_where(None, endangered_grade, redlist_category, pfx="s.", protected=True)
+        out = _region_gap(col, code, name, level, sw, swp, state or "undiscovered", limit, cutoff)
+        out["filter"] = {"endangered_grade": endangered_grade, "redlist_category": redlist_category,
+                         "protected_default": is_default}
+        return out
+    sw, swp = _species_where(None, endangered_grade, redlist_category, protected=True)
+    total = db.one(f"SELECT COUNT(*) c FROM species WHERE 1=1{sw}", swp)["c"]
+    species = db.rows(
+        f"SELECT {_SP_COLS} FROM species WHERE 1=1{sw} "
+        "ORDER BY (endangered_grade!='') DESC, national_redlist_category, korean_name LIMIT ?",
+        swp + [limit + 1])
+    truncated = len(species) > limit
+    species = species[:limit]
     for r in species:
-        if "has_media" in r:
-            r["has_media"] = bool(r["has_media"])
-    return {"region": code, "region_name": name, "level": level,
-            "taxon_group": taxon_group, "reference_year": _ref_year(), "discovery_cutoff": cutoff,
-            "summary": summary, "state": state, "species": species, "truncated": truncated}
+        r["has_media"] = bool(r["has_media"])
+    return {"scope": "national", "count": total, "reference_year": _ref_year(),
+            "filter": {"endangered_grade": endangered_grade, "redlist_category": redlist_category,
+                       "protected_default": is_default},
+            "species": species, "truncated": truncated}
 
 
-def region_comparison(regions, taxon_group=None):
-    """여러 지역의 발견/휴면/미발견 요약을 나란히 비교."""
+def region_comparison(regions, taxon_group=None, redlist_category=None, endangered_grade=None):
+    """여러 지역의 발견/휴면/미발견 요약을 나란히 비교. endangered_grade·redlist_category 필터 가능."""
     if isinstance(regions, str):
         regions = [regions]
     cutoff = _cutoff()
-    total = _scope_total(taxon_group)
-    tclause = " AND taxon_group=?" if taxon_group else ""
-    tparam = [taxon_group] if taxon_group else []
+    sw, swp = _species_where(taxon_group, endangered_grade, redlist_category, pfx="s.")
+    total = db.one(f"SELECT COUNT(*) c FROM species s WHERE 1=1{sw}", swp)["c"]
     out = []
     for region in regions:
         try:
@@ -173,13 +244,15 @@ def region_comparison(regions, taxon_group=None):
             out.append({"region": str(region), "error": str(e)})
             continue
         name, level = _region_name(code)
-        rec = db.rows(f"SELECT ktsn, MAX(maxyear) my FROM species_region WHERE {col}=?{tclause} GROUP BY ktsn",
-                      [code] + tparam)
+        rec = db.rows(
+            "SELECT sr.ktsn, MAX(sr.maxyear) my FROM species_region sr JOIN species s ON s.ktsn=sr.ktsn "
+            f"WHERE sr.{col}=?{sw} GROUP BY sr.ktsn", [code] + swp)
         found = sum(1 for r in rec if r["my"] and r["my"] >= cutoff)
         out.append({"region": code, "region_name": name, "level": level,
                     "total": total, "found": found, "dormant": len(rec) - found,
                     "undiscovered": total - len(rec), "recorded": len(rec)})
-    return {"taxon_group": taxon_group, "reference_year": _ref_year(),
+    return {"taxon_group": taxon_group, "redlist_category": redlist_category,
+            "endangered_grade": endangered_grade, "reference_year": _ref_year(),
             "discovery_cutoff": cutoff, "regions": out}
 
 
@@ -193,13 +266,21 @@ def taxa_summary():
         "(SELECT taxon_group, ktsn, MAX(maxyear) my FROM species_region GROUP BY taxon_group, ktsn) "
         "GROUP BY taxon_group", (cutoff,))
     am = {r["taxon_group"]: r for r in agg}
+    # 분류군별 위협종 수(멸종위기 I/II · 적색목록 CR/EN/VU/NT)
+    prot = {r["taxon_group"]: r for r in db.rows(
+        "SELECT taxon_group, "
+        "SUM(CASE WHEN endangered_grade!='' THEN 1 ELSE 0 END) endangered, "
+        "SUM(CASE WHEN national_redlist_category IN ('CR','EN','VU','NT') THEN 1 ELSE 0 END) redlist_threatened "
+        "FROM species GROUP BY taxon_group")}
     out = []
     for t, b in base.items():
         a = am.get(t, {"recorded": 0, "discovered": 0})
         rec, disc = a["recorded"], a["discovered"]
+        p = prot.get(t, {"endangered": 0, "redlist_threatened": 0})
         out.append({"taxon_group": t, "taxon_group_kor": b["taxon_group_kor"],
                     "n_species": b["n_species"], "discovered": disc,
-                    "dormant": rec - disc, "undiscovered": b["n_species"] - rec, "recorded": rec})
+                    "dormant": rec - disc, "undiscovered": b["n_species"] - rec, "recorded": rec,
+                    "endangered": p["endangered"], "redlist_threatened": p["redlist_threatened"]})
     out.sort(key=lambda x: -x["n_species"])
     return {"reference_year": _ref_year(), "discovery_cutoff": cutoff, "taxa": out}
 

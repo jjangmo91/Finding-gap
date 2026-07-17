@@ -23,9 +23,10 @@ mcp = FastMCP(
 
 
 @mcp.tool()
-def search_species(query: str, taxon_group: str = "", limit: int = 10) -> list:
-    """국명 또는 학명으로 종을 검색(부분일치). 반환: 종코드(ktsn)·국명·학명·분류군·멸종위기등급·적색목록·미디어보유."""
-    return tools.search_species(query, taxon_group or None, limit)
+def search_species(query: str, taxon_group: str = "", limit: int = 10,
+                   endangered_grade: str = "", redlist_category: str = "") -> list:
+    """국명 또는 학명으로 종을 검색(부분일치). endangered_grade(I/II)·redlist_category(CR/EN/VU/NT/LC/DD/NA, 쉼표 다중) 필터. 반환: ktsn·국명·학명·분류군·멸종위기등급·적색목록·미디어보유."""
+    return tools.search_species(query, taxon_group or None, limit, endangered_grade or None, redlist_category or None)
 
 
 @mcp.tool()
@@ -35,15 +36,23 @@ def get_species(ktsn: str) -> dict:
 
 
 @mcp.tool()
-def find_gap_by_region(region: str, taxon_group: str = "", state: str = "undiscovered", limit: int = 50) -> dict:
-    """지역(시도 2자리·시군구 5자리)의 발견/휴면/미발견 종 분류. summary 집계 + 요청 state('undiscovered'|'found'|'dormant'|'recorded') 종목록(상한 limit)."""
-    return tools.find_gap_by_region(region, taxon_group or None, state, limit)
+def find_gap_by_region(region: str, taxon_group: str = "", state: str = "undiscovered", limit: int = 50,
+                       endangered_grade: str = "", redlist_category: str = "") -> dict:
+    """지역(시도 2자리·시군구 5자리)의 발견/휴면/미발견 종 분류. summary 집계 + 요청 state('undiscovered'|'found'|'dormant'|'recorded') 종목록(상한 limit). endangered_grade(I/II)·redlist_category(CR/EN/…) 필터 가능."""
+    return tools.find_gap_by_region(region, taxon_group or None, state, limit, endangered_grade or None, redlist_category or None)
 
 
 @mcp.tool()
-def region_comparison(regions: list[str], taxon_group: str = "") -> dict:
-    """여러 지역의 발견/휴면/미발견 종수를 나란히 비교(지역 코드 리스트)."""
-    return tools.region_comparison(regions, taxon_group or None)
+def list_protected_species(region: str = "", endangered_grade: str = "", redlist_category: str = "",
+                           state: str = "", limit: int = 50) -> dict:
+    """멸종위기종·국가적색목록 종 목록. 등급/범주 미지정 시 위협종(멸종위기 I/II 또는 적색목록 CR/EN/VU/NT) 기본. region(시도2·시군구5) 지정 시 그 지역의 발견/휴면/미발견(state) 분류 — 예: '종로구(11010) 미발견 멸종위기 I급'."""
+    return tools.list_protected_species(region or None, endangered_grade or None, redlist_category or None, state or None, limit)
+
+
+@mcp.tool()
+def region_comparison(regions: list[str], taxon_group: str = "", redlist_category: str = "", endangered_grade: str = "") -> dict:
+    """여러 지역의 발견/휴면/미발견 종수를 나란히 비교(지역 코드 리스트). endangered_grade·redlist_category 필터 가능."""
+    return tools.region_comparison(regions, taxon_group or None, redlist_category or None, endangered_grade or None)
 
 
 @mcp.tool()

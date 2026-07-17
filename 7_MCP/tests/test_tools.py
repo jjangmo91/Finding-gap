@@ -87,6 +87,49 @@ def test_bad_region_code():
         pass
 
 
+def test_list_protected_national_default():
+    r = tools.list_protected_species(limit=20)
+    assert r["scope"] == "national"
+    assert r["count"] >= 700           # 멸종위기(277) ∪ 적색목록 위협(CR/EN/VU/NT)
+    for s in r["species"]:
+        assert s["endangered_grade"] or s["national_redlist_category"] in ("CR", "EN", "VU", "NT")
+
+
+def test_list_protected_redlist_cr():
+    r = tools.list_protected_species(redlist_category="CR", limit=100)
+    assert r["count"] == 65            # 적색목록 CR = 65종(커밋 데이터)
+    assert all(s["national_redlist_category"] == "CR" for s in r["species"])
+
+
+def test_list_protected_region_endangered_state():
+    r = tools.list_protected_species(region="11010", endangered_grade="I", state="undiscovered", limit=10)
+    assert r["region"] == "11010"
+    s = r["summary"]
+    assert s["found"] + s["dormant"] + s["undiscovered"] == s["total"]
+    assert s["total"] == 67            # 멸종위기 I급 = 67종
+    assert all(x["endangered_grade"] == "I" for x in r["species"])
+
+
+def test_find_gap_redlist_filter_consistent():
+    g = tools.find_gap_by_region("11", taxon_group="AV", redlist_category="EN,VU", state="undiscovered", limit=5)
+    s = g["summary"]
+    assert s["found"] + s["dormant"] + s["undiscovered"] == s["total"]
+    assert all(x["national_redlist_category"] in ("EN", "VU") for x in g["species"])
+
+
+def test_search_grade_normalization():
+    # '1급' / '2' 같은 표기도 I/II 로 정규화되어 필터
+    a = tools.list_protected_species(endangered_grade="1급", limit=5)
+    b = tools.list_protected_species(endangered_grade="I", limit=5)
+    assert a["count"] == b["count"] == 67
+
+
+def test_taxa_summary_has_protected_fields():
+    ts = tools.taxa_summary()["taxa"]
+    assert all("endangered" in t and "redlist_threatened" in t for t in ts)
+    assert sum(t["endangered"] for t in ts) == 277    # 멸종위기 I(67)+II(210)
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0
