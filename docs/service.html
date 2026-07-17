@@ -157,6 +157,91 @@
   .lk.danger .t{color:#a23b1a}
   .muted{color:var(--muted);font-size:12.5px}
   footer{margin-top:24px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px;line-height:1.7}
+
+  /* ═══════ 모바일(≤880px) 반응형 — 데스크톱(≥881px)은 위 규칙 그대로 ═══════ */
+  @media(max-width:880px){
+    .wrap{padding:14px 12px 56px}
+    header h1{font-size:18px}
+    header .back{padding:8px 14px;min-height:44px;display:inline-flex;align-items:center;font-size:13px}
+
+    /* 탭: 스크롤 중에도 모드 전환 접근 가능하게 상단 고정 */
+    .tabs{position:sticky;top:0;z-index:100;background:var(--bg);margin:12px 0 12px;padding-top:2px;box-shadow:0 1px 0 var(--line)}
+    .tabs button{min-height:44px}
+
+    /* 컨트롤: 고정폭(min-width:130px) 제거 → 가변폭 분할 + 줄바꿈 */
+    .controls{gap:8px 10px}
+    .controls .field{flex:1 1 104px;min-width:0}
+    select{min-width:0;width:100%;min-height:44px}
+    input[type=search]{min-height:44px}
+    .seg{width:100%}
+    .seg button{flex:1;min-height:44px;padding:10px 8px}
+
+    /* 좌우 분할 → 세로 스택(지도 위·목록 아래, .split 1열 전환은 기존 규칙) */
+    .split{position:relative;z-index:1}
+
+    /* 지도 오버레이 폭 제한 → 지도 팬/줌 공간 확보 */
+    .env-ctrl{width:auto;max-width:150px;font-size:11px;padding:6px 8px}
+    .env-ctrl select{min-height:0;padding:5px 6px}
+    .env-ctrl .env-op input{min-height:0}
+    .map-ctrls{z-index:2}
+    .reg-toggle button{min-height:40px;display:inline-flex;align-items:center}
+
+    /* 범례: 줄바꿈 허용 + 컬러바 축소 */
+    .legend{flex-wrap:wrap;gap:6px 8px;font-size:10.5px}
+    .ramp{width:84px;flex:none}
+    #legCap,#legCapB{flex-basis:100%}
+
+    /* 종 목록(Mode A): 5열 테이블 → 카드(가로 스크롤 없이 세로 스캔) */
+    #tbl,#tbl tbody{display:block;width:100%}
+    #tbl thead{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}  /* 시각적으로만 숨김 — 스크린리더는 열 이름 읽음 */
+    #tbl tbody tr{display:block}
+    #tbl tbody tr.rowlink{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 12px;margin:0 0 8px}
+    #tbl tbody tr.rowlink:hover{background:#f6f9f7}
+    #tbl td{display:inline;border:0;padding:0;white-space:normal;font-size:13px}
+    #tbl td:nth-child(1){display:block;font-weight:600;font-size:14px;line-height:1.35}
+    #tbl td:nth-child(1) .sci{font-weight:600;font-size:14px}
+    #tbl td:nth-child(2){display:block;margin:1px 0 8px;font-size:12px}
+    #tbl td:nth-child(3),#tbl td:nth-child(4){margin-right:6px}
+    #tbl td:nth-child(5){display:block;margin-top:8px;color:var(--muted);font-size:12px;text-align:left}
+    #tbl td:nth-child(5):empty{display:none}
+    #tbl td:nth-child(5):not(:empty)::before{content:"관측 ";color:var(--faint)}
+    #tbl tbody tr:not(.rowlink) td{display:block;padding:10px;white-space:normal}
+    /* 국명 없는 종: td1이 학명(.sci) → td2 학명 중복 숨김(:has 미지원 브라우저는 기존대로) */
+    #tbl tbody tr.rowlink td:nth-child(1):has(.sci)+td:nth-child(2){display:none}
+
+    /* 발견지역표/적합지표(3열): 카드 대신 콤팩트 유지 + 가로 스크롤 폴백 */
+    .regtbl,.gaptbl{font-size:11.5px}
+    .regtbl th,.gaptbl th{padding:6px 7px}
+    .regtbl td,.gaptbl td{padding:5px 7px;word-break:break-word}
+    .regtbl-wrap{-webkit-overflow-scrolling:touch}
+
+    /* 환경변수 막대 그리드: 고정폭(92/138) 축소 */
+    .envrow,.envhead{grid-template-columns:78px 1fr 104px;gap:7px}
+    .envrow .lbl{font-size:11px;word-break:keep-all}
+    .envrow .val{font-size:11px}
+
+    /* 종 카드 */
+    .scard{padding:14px 16px;max-width:100%}
+    .scard h3{font-size:17px;word-break:keep-all;overflow-wrap:anywhere}
+    .links{gap:8px}
+    .lk{flex:1 1 100%}
+
+    /* Mode B 검색결과: 3요소 한 줄 겹침 → 2행 배치 + 44px 터치 타깃 */
+    .sresults{max-height:260px}
+    .sresults .r{display:grid;grid-template-columns:1fr auto;grid-template-areas:"nm nm" "sci tg";gap:3px 8px;padding:11px 14px;min-height:44px;align-items:baseline}
+    .sresults .r>.nm{grid-area:nm}
+    .sresults .r>.sci{grid-area:sci}
+    .sresults .r>.tg{grid-area:tg;margin-left:0;justify-self:end;align-self:center}
+    .sresults .r>.nm:has(.sci)~.sci{display:none}  /* 국명 없는 종: nm이 학명 표시 → 중복 sci 숨김 */
+
+    /* 관심종·CSV 버튼 터치 타깃 */
+    .watchbtn{min-height:44px}
+    .panel h2 .dl{min-height:44px;display:inline-flex;align-items:center}
+  }
+  /* 가로(landscape)·낮은 뷰포트: 지도 높이 축소로 이중 스크롤 완화 */
+  @media(max-width:880px) and (max-height:560px){
+    #map,#mapB{height:300px}
+  }
 </style>
 </head>
 <body>
@@ -701,11 +786,11 @@ function renderTable(){
   tblCnt.textContent=`발견 ${nf(foundN)} · 미발견 ${nf(gapN)} / 총 ${nf(all.length)}종 — 표시: ${metric==='found'?'발견':'미발견'} ${nf(rows.length)}종`;
   const ar=k=>sortKey===k?`<span class="ar on">${sortDir<0?'▼':'▲'}</span>`:`<span class="ar off">↕</span>`;
   const head=`<thead><tr>
-    <th onclick="sortBy('n')" title="국명으로 정렬">국명${ar('n')}</th>
-    <th onclick="sortBy('s')" title="학명으로 정렬">학명${ar('s')}</th>
-    <th onclick="sortBy('g')" title="멸종위기 야생생물 등급으로 정렬(I급 먼저)">멸종위기종${ar('g')}</th>
-    <th onclick="sortBy('r')" title="국가적색목록 범주로 정렬(심각도 순)">국가적색목록${ar('r')}</th>
-    <th onclick="sortBy('c')" class="num" title="관측 수로 정렬">관측${ar('c')}</th></tr></thead>`;
+    <th scope="col" onclick="sortBy('n')" title="국명으로 정렬">국명${ar('n')}</th>
+    <th scope="col" onclick="sortBy('s')" title="학명으로 정렬">학명${ar('s')}</th>
+    <th scope="col" onclick="sortBy('g')" title="멸종위기 야생생물 등급으로 정렬(I급 먼저)">멸종위기종${ar('g')}</th>
+    <th scope="col" onclick="sortBy('r')" title="국가적색목록 범주로 정렬(심각도 순)">국가적색목록${ar('r')}</th>
+    <th scope="col" onclick="sortBy('c')" class="num" title="관측 수로 정렬">관측${ar('c')}</th></tr></thead>`;
   const shown=rows.slice(0,ROWCAP);
   const body=shown.map(x=>
     `<tr class="rowlink" onclick="openSpecies('${x.k}')" title="종별 검색으로 보기 →">`+
