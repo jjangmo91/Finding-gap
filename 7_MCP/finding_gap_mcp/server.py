@@ -86,6 +86,20 @@ def interest_ranking(taxon_group: str = "", redlist_category: str = "", level: s
 
 
 @mcp.tool()
+def discovery_priorities(region: str, taxon_group: str = "", endangered_grade: str = "",
+                         redlist_category: str = "", include_dormant: bool = False, limit: int = 20) -> dict:
+    """지역(시도2·시군구5)에서 아직 발견되지 않았지만 관심도가 높은 종을 우선순위로 반환 — 발견공백×관심도 교집합. include_dormant=True면 휴면(오래전 기록)도 포함. endangered_grade(I/II)·redlist_category(CR/EN/…) 필터."""
+    return tools.discovery_priorities(region, taxon_group or None, endangered_grade or None,
+                                      redlist_category or None, include_dormant, limit)
+
+
+@mcp.tool()
+def region_profile(region: str, top: int = 5) -> dict:
+    """지역 생물다양성 프로파일 — 분류군별 발견/휴면/미발견 종수 + 위협종(멸종위기·적색목록) 발견 공백 + 미발견 관심도 상위종 Top을 한 번에."""
+    return tools.region_profile(region, top)
+
+
+@mcp.tool()
 def find_region(name: str = "", level: str = "") -> dict:
     """행정구역 이름으로 코드 찾기(다른 도구의 region 입력용). level='sido'|'sigungu' 로 제한 가능."""
     return tools.find_region(name or None, level or None)

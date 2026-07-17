@@ -8,13 +8,15 @@
 - 데이터: `data/fg_mcp.sqlite.gz`(약 18MB, 커밋됨) — 서버가 최초 실행 시 로컬 sqlite로 해제
 - 비상업 용도(NIBR=KOGL 공공누리, iNat=CC 비상업·귀속)
 
-## 도구 (11)
+## 도구 (13)
 
 | 도구 | 설명 |
 |------|------|
 | `search_species(query, taxon_group?, limit?, endangered_grade?, redlist_category?)` | 국명·학명 부분검색(+등급·적색목록 필터) → 종코드·등급·적색목록·미디어·관심도 |
 | `get_species(ktsn)` | 종 상세 + 전국 발견상태(발견지역수·최신연도)·환경/미디어·관심도 |
 | `find_gap_by_region(region, taxon_group?, state?, limit?, endangered_grade?, redlist_category?)` | 지역의 발견/휴면/**미발견** 종 분류(summary + 종목록) |
+| `discovery_priorities(region, taxon_group?, endangered_grade?, redlist_category?, include_dormant?, limit?)` | 지역 **미발견 종을 관심도순**으로 — 발견공백×관심도(주목할 미발견 종) |
+| `region_profile(region, top?)` | 지역 생물다양성 프로파일(분류군별 발견/미발견 + 위협종 공백 + 미발견 주목종 Top) |
 | `list_protected_species(region?, endangered_grade?, redlist_category?, state?, limit?)` | 멸종위기·적색목록 종(지역 지정 시 발견/미발견 분류) — 예: 종로구 미발견 멸종위기 I급 |
 | `region_comparison(regions[], taxon_group?, redlist_category?, endangered_grade?)` | 여러 지역 발견/미발견 비교 |
 | `taxa_summary()` | 9개 분류군별 종수·발견/휴면/미발견·위협종 수 |

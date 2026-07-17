@@ -196,6 +196,34 @@ def test_search_output_has_interest():
     assert r and "interest" in r[0]
 
 
+def test_discovery_priorities_undiscovered_ranked():
+    r = tools.discovery_priorities("11010", taxon_group="MM", limit=10)
+    sp = r["species"]
+    assert sp                                              # 미발견 후보 존재
+    vals = [s["interest"] for s in sp]
+    assert vals == sorted(vals, reverse=True)              # 관심도 내림차순
+    assert all(s["discovery_state"] == "undiscovered" for s in sp)   # 기본=미발견만
+    s = r["summary"]
+    assert s["found"] + s["dormant"] + s["undiscovered"] == s["candidates"]
+
+
+def test_discovery_priorities_endangered_filter():
+    r = tools.discovery_priorities("11010", endangered_grade="I", limit=100)
+    assert r["summary"]["undiscovered"] == 64              # 종로구 미발견 멸종위기 I급(Stage1과 일치)
+    assert all(s["endangered_grade"] == "I" for s in r["species"])
+
+
+def test_region_profile_consistency():
+    p = tools.region_profile("11", top=5)
+    assert p["taxa"] and len(p["top_undiscovered_by_interest"]) <= 5
+    for t in p["taxa"]:
+        assert t["found"] + t["dormant"] + t["undiscovered"] == t["n_species"]
+    tot = p["totals"]
+    assert tot["found"] + tot["dormant"] + tot["undiscovered"] == tot["n_species"]
+    pr = p["protected"]
+    assert pr["recorded"] + pr["undiscovered"] == pr["total"]
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0
