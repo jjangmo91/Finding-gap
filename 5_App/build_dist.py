@@ -21,7 +21,7 @@ DATA = APP / "demo" / "data"
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
 PAGES = ["index.html", "service.html", "fg_supabase.js", "fg_analytics.js", "quiz.html"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
-              "species_index.js", "species_state.js", "sido.geojson", "sigungu.geojson",
+              "species_index.js", "species_state.js", "species_interest.js", "sido.geojson", "sigungu.geojson",
               "env_meta.js", "species_env.js",
               "env_grid.js", "gap_meta.js",        # 발견공백 A: 전국 1km 격자 + 메타(지연 로드)
               "taxon_ko.js"]                       # 퀴즈 범위: 과·속 라틴→한글 룩업

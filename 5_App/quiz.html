@@ -277,6 +277,7 @@
 <script src="fg_analytics.js"></script>
 <script src="demo/data/media_meta.js"></script>
 <script src="demo/data/species_index.js"></script>
+<script src="demo/data/species_interest.js"></script>
 <script src="demo/data/species_state.js"></script>
 <script src="demo/data/taxon_ko.js"></script>
 <script>
@@ -301,6 +302,15 @@ const TAXON_LABELS = {
 
 // ── UTIL ───────────────────────────────────────────────────────
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function interestOf(ktsn){return ((window.__SPINT__||{})[ktsn]||0)/1000;}   // 관심도 0~1 (자산 없으면 0)
+// 관심도 가중 무작위 — 인지도 높은 종이 더 자주 출제(단, 낮아도 최소 노출). weight=0.2+0.8·관심도
+function weightedPick(pool){
+  if(!pool||!pool.length) return null;
+  let tot=0; const w=pool.map(s=>{const x=0.2+0.8*interestOf(s.k); tot+=x; return x;});
+  let r=Math.random()*tot;
+  for(let i=0;i<pool.length;i++){ r-=w[i]; if(r<=0) return pool[i]; }
+  return pool[pool.length-1];
+}
 function loadState(){state.best=parseInt(localStorage.getItem('quiz_best')||'0');state.total=parseInt(localStorage.getItem('quiz_total')||'0');state.current=0;updateScoreDisplay();}
 function saveState(){localStorage.setItem('quiz_best',state.best);localStorage.setItem('quiz_total',state.total);}
 function updateScoreDisplay(){document.getElementById('current').textContent=state.current;document.getElementById('best').textContent=state.best;document.getElementById('total').textContent=state.total;}
@@ -499,7 +509,7 @@ function showLoadError(msg){
 // ── SPECIES SELECTION ──────────────────────────────────────────
 function getRandomSpeciesForMode(){
   if(state.mode==='species') return speciesById(state.fixedKtsn);
-  if(state.mode==='taxon'){const ms=scopeSpecies();if(!ms.length)return null;return ms[Math.floor(Math.random()*ms.length)];}
+  if(state.mode==='taxon'){const ms=scopeSpecies();if(!ms.length)return null;return weightedPick(ms);}
   const m=(window.__SPMEDIA__||{}).m||{};const ks=Object.keys(m);if(!ks.length)return null;const k=ks[Math.floor(Math.random()*ks.length)];return speciesById(k)||{k,n:'미분류 종',s:k,t:'MM'};
 }
 

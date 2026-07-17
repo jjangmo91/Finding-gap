@@ -316,10 +316,12 @@
   .watchbtn:disabled{opacity:.6;cursor:default}
 </style>
 <script src="config.js" onerror="window.VWORLD_KEY=window.VWORLD_KEY||''"></script>
+<script src="fg_analytics.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js"></script>
 <script src="demo/data/taxa_summary.js"></script>
 <script src="demo/data/obs_meta.js"></script>
 <script src="demo/data/species_index.js"></script>
+<script src="demo/data/species_interest.js"></script>
 <script src="demo/data/env_meta.js"></script>
 <script src="demo/data/media_meta.js"></script>
 <script>
@@ -374,6 +376,7 @@ function loadTaxon(t, cb){
 }
 const TAXA=(window.__TAXA__||[]).filter(t=>t.has_data); // 데이터 보유 분류군만 노출
 const SPIDX=window.__SPIDX__||[];                       // 서비스 종 인덱스(제외종 반영)
+function interestOf(k){return ((window.__SPINT__||{})[k]||0)/1000;}   // 관심도 0~1(층 내 백분위; 자산 없으면 0)
 const KEY=window.VWORLD_KEY||'';
 const ROWCAP=1500;                                      // 대용량 분류군 테이블 표시 상한(전체는 CSV)
 const SP_BY_TAX={};                                     // 분류군 → 종목록(검색 인덱스 파생)
@@ -767,7 +770,7 @@ function tableRows(){
   const cnt=new Map();
   for(const [k,s,yy,c] of obs){ if(selSidos.size && !selSidos.has(rkey(s)))continue; const y=+yy; if(y<y0||y>y1)continue; cnt.set(k,(cnt.get(k)||0)+c); }
   const sp=spA();
-  let rows=sp.map(x=>({k:x.k,n:x.n,s:x.s,g:x.g,r:x.r,c:cnt.get(x.k)||0,found:cnt.has(x.k)}));
+  let rows=sp.map(x=>({k:x.k,n:x.n,s:x.s,g:x.g,r:x.r,c:cnt.get(x.k)||0,found:cnt.has(x.k),iv:interestOf(x.k)}));
   const egr=g=>g==='I'?0:g==='II'?1:2;
   rows.sort((a,b)=>{
     let d=0;
@@ -775,7 +778,7 @@ function tableRows(){
     else if(sortKey==='g') d=egr(b.g)-egr(a.g);          // 내림차순=I급 먼저
     else if(sortKey==='r') d=rlr(b.r)-rlr(a.r);          // 내림차순=EX(심각) 먼저
     else d=String(a[sortKey]||'').localeCompare(String(b[sortKey]||''),'ko');
-    return d*sortDir || (a.n||a.s).localeCompare(b.n||b.s,'ko');
+    return d*sortDir || (b.iv-a.iv) || (a.n||a.s).localeCompare(b.n||b.s,'ko');  // 동순위는 관심도↑ 먼저(미발견 목록서 주목종 상단)
   });
   return rows;
 }
@@ -963,6 +966,7 @@ function envBars(sp){                                     // 발견지점 기후
 }
 function renderSpecies(sp){
   selSpecies=sp;
+  window.fgTrack&&fgTrack('species_open',{ktsn:sp.k,taxon:sp.t});
   selRegions=speciesRegions(sp,sy0,sy1);                  // 지도 강조용(활성 레벨)
   const eg=isEndangered(sp.g);
   const envHtml=envBars(sp);                              // 기후·지형 지위 막대(데이터 있을 때만)
@@ -976,6 +980,10 @@ function renderSpecies(sp){
       <button class="watchbtn" data-k="${sp.k}" style="margin-left:auto" hidden>☆ 관심 종</button>
     </div>
     <div style="margin-top:8px">${badges(sp.g,sp.r)||'<span class="muted">일반종</span>'} <span class="badge" style="background:#eef3f1;color:#2f6f5e">${TAXON_KOR[sp.t]||sp.t}</span></div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:8px" title="같은 분류군·희귀도 그룹 안에서 이 종에 대한 대중 관심(관측 기록·한국어 위키 조회 기반)의 상대 위치">
+      <span class="muted" style="font-size:12px;white-space:nowrap">관심도</span>
+      <span style="flex:1;max-width:150px;height:6px;background:#eef1f0;border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:${Math.round(interestOf(sp.k)*100)}%;background:#6a9a86"></span></span>
+      <span class="muted" style="font-size:12px">${Math.round(interestOf(sp.k)*100)}<span style="font-size:10px">/100</span></span></div>
     <div class="row"><div class="k khead" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span>분포 · ${sy0}–${sy1}</span>
         <span class="spview-tg">
@@ -1017,6 +1025,7 @@ function openSpecies(k){
 /* ── 모드 전환 ── */
 function setMode(m){
   mapMode=m;
+  window.fgTrack&&fgTrack('mode_switch',{mode:m});
   tabA.classList.toggle('on',m==='A'); tabB.classList.toggle('on',m==='B');
   modeA.style.display=m==='A'?'':'none'; modeB.style.display=m==='B'?'':'none';
   if(gapLayer) gapLayer.setVisible(m==='B' && spView==='gap' && !!selSpecies);   // 후보셀은 종별 미발견 뷰에서만
