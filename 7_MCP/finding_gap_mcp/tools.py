@@ -328,11 +328,12 @@ def get_interest(ktsn):
     ktsn = str(ktsn).strip()
     sp = db.one(
         "SELECT ktsn,korean_name,scientific_name,taxon_group,taxon_group_kor,national_redlist_category,"
-        "interest,interest_occ,interest_wiki,interest_user,wiki_ko,wiki_en,stratum_n,interest_fallback "
+        "interest,interest_occ,interest_wiki,interest_user,wiki_ko,wiki_en,watch_count,stratum_n,interest_fallback "
         "FROM species WHERE ktsn=?", (ktsn,))
     if not sp:
         return {"error": f"종을 찾을 수 없습니다: ktsn={ktsn}"}
     sp["interest_fallback"] = bool(sp["interest_fallback"])
+    sp["user_watch_count"] = sp.pop("watch_count")          # 관심종 익명 집계수(개인식별 불가)
     strat = sp["national_redlist_category"] or ""
     rk = db.one("SELECT COUNT(*) n, SUM(CASE WHEN interest>? THEN 1 ELSE 0 END) above "
                 "FROM species WHERE taxon_group=? AND national_redlist_category=?",
@@ -448,6 +449,24 @@ def region_profile(region, top=5):
             "discovery_cutoff": cutoff, "totals": totals, "taxa": taxa,
             "protected": {"total": prot_total, "recorded": prot_rec, "undiscovered": prot_total - prot_rec},
             "top_undiscovered_by_interest": top_species}
+
+
+def trending_species(taxon_group=None, redlist_category=None, limit=20):
+    """가장 많이 관심종으로 담긴 종(익명 집계) — 집단 사용자 관심(watchlist). watch_count>0만 반환하며,
+    사용자 관심종 미수집 시 빈 목록. 개인정보 미포함(종별 집계수만). taxon_group·redlist_category 로 한정."""
+    limit = max(1, min(int(limit), 200))
+    sw, swp = _species_where(taxon_group, None, redlist_category)
+    rows = db.rows(
+        f"SELECT {_SP_COLS}, watch_count FROM species WHERE watch_count>0{sw} "
+        "ORDER BY watch_count DESC, interest DESC, korean_name LIMIT ?", swp + [limit])
+    for r in rows:
+        r["has_media"] = bool(r["has_media"])
+    agg = db.one("SELECT COUNT(*) n, COALESCE(SUM(watch_count),0) s FROM species WHERE watch_count>0")
+    return {"level": "species", "taxon_group": taxon_group, "redlist_category": redlist_category,
+            "watched_species": agg["n"], "total_marks": agg["s"], "count": len(rows),
+            "note": ("관심종 익명 집계 기반(개인식별 불가)." if rows
+                     else "사용자 관심종 미수집 — 빈 목록. Supabase RPC(species_watch_counts) 배포·집계 후 활성."),
+            "species": rows}
 
 
 def find_region(name=None, level=None):

@@ -38,3 +38,14 @@ export async function watchList() {
 }
 export async function watchAdd(ktsn) { return sb.from('watchlist').insert({ ktsn }); }
 export async function watchRemove(ktsn) { return sb.from('watchlist').delete().eq('ktsn', ktsn); }
+
+// ── 익명 관심종 집계(전체 사용자) — species_watch_counts() RPC ──
+// 원시 watchlist 는 RLS(본인 행)로 보호되고, 이 RPC(SECURITY DEFINER)는 종별 집계 카운트만 반환(개인식별 불가).
+// 마이그레이션: 5_App/supabase/species_watch_counts.sql. 미배포면 빈 배열.
+export async function watchCounts() {
+  if (!sb) return [];
+  const { data, error } = await sb.rpc('species_watch_counts');
+  if (error) throw error;
+  return (data || []).map(r => ({ ktsn: r.ktsn, count: Number(r.watch_count) || 0 }))
+                     .sort((a, b) => b.count - a.count);
+}

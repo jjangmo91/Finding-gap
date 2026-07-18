@@ -8,7 +8,7 @@
 - 데이터: `data/fg_mcp.sqlite.gz`(약 18MB, 커밋됨) — 서버가 최초 실행 시 로컬 sqlite로 해제
 - 비상업 용도(NIBR=KOGL 공공누리, iNat=CC 비상업·귀속)
 
-## 도구 (13)
+## 도구 (14)
 
 | 도구 | 설명 |
 |------|------|
@@ -21,7 +21,8 @@
 | `region_comparison(regions[], taxon_group?, redlist_category?, endangered_grade?)` | 여러 지역 발견/미발견 비교 |
 | `taxa_summary()` | 9개 분류군별 종수·발견/휴면/미발견·위협종 수 |
 | `interest_ranking(taxon_group?, redlist_category?, level?, limit?)` | 관심도 순위(level='species'|'taxon') |
-| `get_interest(ktsn)` | 종 관심도 상세 — 층(분류군×적색목록) 내 관측·한국어위키·사용자 신호와 순위(ko/en 조회수 병기) |
+| `trending_species(taxon_group?, redlist_category?, limit?)` | 가장 많이 관심종으로 담긴 종(watchlist 익명 집계) — 집단 대중 관심. 미수집 시 빈 목록 |
+| `get_interest(ktsn)` | 종 관심도 상세 — 층(분류군×적색목록) 내 관측·한국어위키·사용자 신호와 순위(ko/en 조회수·관심종 집계수 병기) |
 | `get_species_bioclim(ktsn, variables?)` | 종의 환경지위(bio01/05/06/12·dem·ndvi/ndwi) |
 | `get_species_media(ktsn, media_type?, limit?)` | 종 미디어(사진·도판·영상 URL·라이선스·출처) |
 | `find_region(name?, level?)` | 행정구역 이름 → 코드(다른 도구의 `region` 입력용) |

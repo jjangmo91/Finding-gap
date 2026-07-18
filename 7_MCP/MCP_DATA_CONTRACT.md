@@ -10,7 +10,8 @@
 `class_la` `order_la` `family_la` `genus_la` · `rank` · `endangered_grade`(I/II/'') ·
 `national_redlist_category`(CR/EN/VU/NT/LC/DD/…) · `has_media`(0/1) ·
 `interest`(0~1) · `interest_occ` · `interest_wiki`(nullable) · `interest_user` · `stratum_n` · `interest_fallback`(0/1) ·
-`wiki_ko`(한국어 위키 12개월 조회수·정수) · `wiki_en`(영어 위키 조회수·참고용·점수 미반영)
+`wiki_ko`(한국어 위키 12개월 조회수·정수) · `wiki_en`(영어 위키 조회수·참고용·점수 미반영) ·
+`watch_count`(관심종 익명 집계수·정수; 개인식별 불가·`interest_user`·`trending_species` 원천)
 - 서비스 제외: 해양포유류·미삭동물(species_service_flags 기준).
 
 ### `species_region` — (종 × 지역) 발견 집계 (590,179)
@@ -60,6 +61,6 @@
 
 ## 갱신
 1. `build_wiki_interest.py` — 한국어 위키 조회수 재수집(`wiki_pageviews.json`, 최근 12개월 창). **월 1회 권장**(조회수는 가벼워 6개월 ETL과 별개로 최신화).
-2. (선택) `build_watch_snapshot.py` — 관심종 익명 집계(`watch_counts.json`; watchlist 공개 SELECT RLS 또는 service_role 필요). 수집 시 `interest_user_active=1`.
+2. (선택) `build_watch_snapshot.py` — 관심종 익명 집계(`watch_counts.json`). Supabase RPC **`species_watch_counts()`**(SECURITY DEFINER; 원시 watchlist RLS 유지·집계 카운트만) 를 publishable 키로 호출. 마이그레이션 `5_App/supabase/species_watch_counts.sql`. 집계 있으면 `interest_user_active=1`. 로컬 검증: `--synthetic N`(임의 유저 시뮬 — 공개 커밋 전 실 스냅샷으로 되돌릴 것).
 3. `build_mcp_data.py` 재실행 → `fg_mcp.sqlite.gz` 커밋. `meta.generated`·`data_max_year`·`interest_wiki_species`·`interest_user_active` 확인.
-관측·환경 ETL은 6개월 주기, 위키 조회수는 월 주기.
+관측·환경 ETL은 6개월 주기, 위키 조회수는 월 주기, 관심종 집계는 수시(사용자 증가 시).

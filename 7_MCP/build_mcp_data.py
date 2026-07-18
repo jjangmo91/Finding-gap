@@ -140,8 +140,8 @@ def main():
     ko_article = {k for k, v in wiki.items() if v.get("ko_title")}   # 한국어 위키 문서 보유 = 위키신호 적용 대상
     sp["wiki_has"] = sp["ktsn"].isin(ko_article)
     watch = _load_json(OUT / "watch_counts.json")
-    sp["watch"] = sp["ktsn"].map({k: float(v) for k, v in watch.items()}).fillna(0.0)
-    user_active = bool(sp["watch"].sum() > 0)                        # watchlist 수집 전이면 user 신호 미적용(몫 재분배)
+    sp["watch_count"] = sp["ktsn"].map({k: int(v) for k, v in watch.items()}).fillna(0).astype("int64")  # 익명 집계(트렌딩·user신호)
+    user_active = bool(sp["watch_count"].sum() > 0)                  # watchlist 수집 전이면 user 신호 미적용(몫 재분배)
 
     sp["_stratum"] = sp["national_redlist_category"].replace("", "none")
     grp = ["taxon_group", "_stratum"]
@@ -153,7 +153,7 @@ def main():
         p = np.where(sp["stratum_n"] >= MIN_STRATUM, s.values, t.values)
         return np.where(sp[col].values > 0, p, 0.0)   # 신호 없으면(0) 백분위 0 — 동점 0.5 허위주입 방지
 
-    p_occ, p_wiki, p_user = _pct("occ_total"), _pct("wiki_ko"), _pct("watch")
+    p_occ, p_wiki, p_user = _pct("occ_total"), _pct("wiki_ko"), _pct("watch_count")
     n = len(sp)                                       # 적용 가능한 신호끼리 가중치 재정규화(occ 항상 포함 → Z>=0.5>0)
     wt_occ = np.full(n, W["occ"])
     wt_wiki = np.where(sp["wiki_has"].values, W["wiki"], 0.0)
@@ -167,7 +167,7 @@ def main():
     sp["interest_fallback"] = (sp["stratum_n"] < MIN_STRATUM).astype(int)
     n_wiki = int(sp["wiki_has"].sum())
     n_user = int((sp["interest_user"] > 0).sum())
-    sp = sp.drop(columns=["occ_total", "wiki_has", "watch", "_stratum"])   # wiki_ko·wiki_en은 참고용으로 보존
+    sp = sp.drop(columns=["occ_total", "wiki_has", "_stratum"])   # wiki_ko·wiki_en·watch_count 은 보존(참고·트렌딩)
     print(f"관심도: 층=분류군×적색목록 · 가중치 occ{W['occ']}/wiki{W['wiki']}/user{W['user']}(재정규화) · "
           f"위키신호(ko문서) {n_wiki}종 · 사용자신호 {n_user}종 · user_active={user_active}")
 

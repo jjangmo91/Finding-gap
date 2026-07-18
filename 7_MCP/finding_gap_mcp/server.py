@@ -100,6 +100,12 @@ def region_profile(region: str, top: int = 5) -> dict:
 
 
 @mcp.tool()
+def trending_species(taxon_group: str = "", redlist_category: str = "", limit: int = 20) -> dict:
+    """가장 많이 관심종으로 담긴 종(사용자 watchlist 익명 집계) — 집단 대중 관심. 개인정보 없이 종별 집계수만. 사용자 관심종 미수집 시 빈 목록. taxon_group·redlist_category 로 한정."""
+    return tools.trending_species(taxon_group or None, redlist_category or None, limit)
+
+
+@mcp.tool()
 def find_region(name: str = "", level: str = "") -> dict:
     """행정구역 이름으로 코드 찾기(다른 도구의 region 입력용). level='sido'|'sigungu' 로 제한 가능."""
     return tools.find_region(name or None, level or None)

@@ -167,6 +167,11 @@
       <h2>시민과학</h2>
       <p>시민과학자가 제보한 관측을 분류군별로 모아, 공식 조사에서 <b>아직 발견되지 않은 종</b>의 재발견 단서를 함께 봅니다. 공식 발견공백(조사정보)과는 분리된 자료로 표시됩니다.</p>
     </div>
+    <div class="authcard" id="trendCard" style="max-width:none" hidden>
+      <h3 style="margin:0 0 4px">많이 담긴 종</h3>
+      <p class="muted2" style="margin:0 0 12px">이용자들이 관심 종으로 가장 많이 담은 종입니다 — 종별 익명 집계(개인 정보 없이 합계만).</p>
+      <ol class="wl trendlist" id="trendList"><li class="muted2">불러오는 중…</li></ol>
+    </div>
     <div class="soonbox">
       <div class="v">곧 제공</div>
       <div class="l">시민 제보 종합</div>
@@ -192,6 +197,12 @@
 <!-- 해치 패턴 정의(범주색 빗금) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="defs"></defs></svg>
 
+<style>
+  .dbadge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px;vertical-align:middle}
+  .trendlist li{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .trendlist .rank{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;background:#eef3f1;color:#2f6f5e;border-radius:50%;font-size:12px;font-weight:700;flex:none}
+  .trendlist .cnt{margin-left:auto;font-weight:700;color:#2f6f5e;white-space:nowrap}
+</style>
 <script src="config.js" onerror="window.SUPABASE_URL=window.SUPABASE_URL||''"></script>
 <script src="fg_analytics.js"></script>
 <script src="demo/data/taxa_summary.js"></script>
@@ -458,9 +469,33 @@ else Promise.all([
 
 <!-- 마이데이터(로그인·관심 종) — Supabase 설정(config.js)이 있을 때만 활성, 없으면 정적 안내 유지 -->
 <script type="module">
-import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove } from './fg_supabase.js';
+import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts } from './fg_supabase.js';
 const view=document.getElementById('view-my');
 const spName=k=>{ const sp=(window.__SPIDX__||[]).find(x=>x.k===k); return sp?{n:sp.n||sp.s,s:sp.s||'',t:sp.t||''}:{n:k,s:'',t:''}; };
+
+// ── 발견 상태(종별 최신 관측연도 → 발견/휴면/미발견) ──
+const _MY=()=>(window.__SPSTATE__||{}).maxyear||{};
+function discState(k){ const y=_MY()[k]; if(y===undefined||y===null) return 'undiscovered'; return y>=(new Date().getFullYear()-10)?'found':'dormant'; }
+const _DLABEL={found:'발견',dormant:'휴면',undiscovered:'미발견'};
+function discBadge(k){ const s=discState(k); const c={found:'#2f6f5e',dormant:'#9a7b2f',undiscovered:'#b5482f'}[s], bg={found:'#e7f1ee',dormant:'#f5eede',undiscovered:'#f7e7e2'}[s];
+  return `<span class="dbadge" style="background:${bg};color:${c}">${_DLABEL[s]}</span>`; }
+
+// ── ① 많이 담긴 종(익명 집계) 위젯 — 시민과학 축 ──
+async function renderTrending(){
+  const card=document.getElementById('trendCard'), host=document.getElementById('trendList');
+  if(!card||!host) return;
+  card.hidden=false;
+  try{
+    const counts=await watchCounts();                       // [{ktsn,count}] (RPC 미배포/무데이터면 [])
+    if(!counts.length){ host.innerHTML='<li class="muted2">아직 담긴 종이 없습니다. 종 정보 페이지에서 ☆를 눌러 관심 종을 추가해 보세요.</li>'; return; }
+    host.innerHTML='';
+    counts.slice(0,15).forEach((c,i)=>{ const sp=spName(c.ktsn); const li=document.createElement('li');
+      li.innerHTML=`<span class="rank">${i+1}</span><span class="nm">${sp.n}</span> <span class="sci">${sp.s}</span> ${discBadge(c.ktsn)}`+
+        `<a class="muted2" href="service.html?sp=${encodeURIComponent(c.ktsn)}" style="margin-left:8px">지도 →</a>`+
+        `<span class="cnt">${c.count}명</span>`;
+      host.appendChild(li); });
+  }catch(err){ host.innerHTML=`<li class="muted2">집계를 불러오지 못했습니다 (${err.message||err}).</li>`; }
+}
 
 function loginCard(){
   view.innerHTML=`
@@ -495,8 +530,9 @@ async function myPage(user){
   view.innerHTML=`
   <div class="vintro"><h2>마이데이터</h2><p><b>${user.email}</b> 님 · 관심 종과 내 제보를 모아 봅니다.</p></div>
   <div class="authcard" style="max-width:none">
-    <div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">관심 종</h3>
+    <div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">관심 종의 발견 현황</h3>
       <button class="btn sec" id="logoutBtn" style="margin-left:auto">로그아웃</button></div>
+    <div class="muted2" id="wlSummary" style="margin:4px 0 10px">내가 담은 종이 전국에서 최근 발견됐는지 보여줍니다.</div>
     <ul class="wl" id="wl"><li class="muted2">불러오는 중…</li></ul>
     <h3 style="margin:18px 0 0">내 제보</h3>
     <p class="muted2" style="margin-top:6px">제보 기능은 다음 단계에서 추가됩니다.</p>
@@ -505,10 +541,14 @@ async function myPage(user){
   const ul=view.querySelector('#wl');
   try{
     const ks=await watchList();
-    if(!ks.length){ ul.innerHTML='<li class="muted2">아직 관심 종이 없습니다. 종 정보 페이지에서 ☆를 눌러 추가하세요.</li>'; return; }
+    const summ=view.querySelector('#wlSummary');
+    if(!ks.length){ ul.innerHTML='<li class="muted2">아직 관심 종이 없습니다. 종 정보 페이지에서 ☆를 눌러 추가하세요.</li>';
+      if(summ) summ.textContent='관심 종을 담으면 여기서 발견 현황을 모아 봅니다.'; return; }
+    const c={found:0,dormant:0,undiscovered:0}; ks.forEach(k=>c[discState(k)]++);
+    if(summ) summ.innerHTML=`관심 종 <b>${ks.length}</b> · 발견 ${c.found} · 휴면 ${c.dormant} · <b style="color:#b5482f">미발견 ${c.undiscovered}</b> — 미발견 종이 당신이 주목하는 발견공백입니다.`;
     ul.innerHTML='';
     for(const k of ks){ const sp=spName(k); const li=document.createElement('li');
-      li.innerHTML=`<span class="nm">${sp.n}</span> <span class="sci">${sp.s}</span>`+
+      li.innerHTML=`<span class="nm">${sp.n}</span> <span class="sci">${sp.s}</span> ${discBadge(k)}`+
         `<a class="muted2" href="service.html?sp=${encodeURIComponent(k)}" style="margin-left:8px">지도에서 보기 →</a>`+
         `<button class="rm" title="관심 해제">✕ 해제</button>`;
       li.querySelector('.rm').onclick=async()=>{ await watchRemove(k); li.remove(); if(!ul.children.length) ul.innerHTML='<li class="muted2">아직 관심 종이 없습니다.</li>'; };
@@ -517,7 +557,7 @@ async function myPage(user){
   }catch(err){ ul.innerHTML=`<li class="authmsg err">관심 종 로드 실패: ${err.message||err}</li>`; }
 }
 
-if(configured) onAuth(user=> user ? myPage(user) : loginCard());
+if(configured){ onAuth(user=> user ? myPage(user) : loginCard()); renderTrending(); }
 </script>
 </body>
 </html>
