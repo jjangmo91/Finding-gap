@@ -334,11 +334,55 @@
   <footer id="foot"></footer>
 </div>
 
+<!-- 발견 제보 모달(Feature B) — 로그인 사용자가 종·위치(지도 핀)·URL·발견일로 관찰을 제보 -->
+<div class="rpt-overlay" id="rptOverlay" hidden>
+  <div class="rpt-modal" role="dialog" aria-modal="true" aria-labelledby="rptTitle">
+    <div class="rpt-hd"><h3 id="rptTitle">발견 제보</h3><button class="x" id="rptClose" type="button" aria-label="닫기">&times;</button></div>
+    <div class="rpt-bd" id="rptBody"></div>
+  </div>
+</div>
+
 <style>
   .watchbtn{appearance:none;border:1px solid #e7e7e2;background:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:#5a5f5c;white-space:nowrap}
   .watchbtn.on{background:#fff7e6;border-color:#f0d9a0;color:#9a7b2e}
   .watchbtn:hover{border-color:#cfcfc7}
   .watchbtn:disabled{opacity:.6;cursor:default}
+
+  /* 발견 제보 모달 */
+  .rpt-overlay{position:fixed;inset:0;background:rgba(20,28,24,.44);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+  .rpt-overlay[hidden]{display:none}
+  .rpt-modal{background:#fff;border-radius:14px;width:100%;max-width:460px;max-height:92vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.28)}
+  .rpt-hd{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .rpt-hd h3{margin:0;font-size:15px}
+  .rpt-hd .x{margin-left:auto;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#8a8f8c;padding:0 6px;min-height:44px}
+  .rpt-bd{padding:14px 16px}
+  .rpt-f{margin-bottom:13px}
+  .rpt-f>label{display:block;font-size:12px;font-weight:600;color:#4f6f61;margin-bottom:5px}
+  .rpt-f .req{color:#c0392b}
+  .rpt-f input,.rpt-f textarea{width:100%;border:1px solid #d7ded9;border-radius:8px;padding:10px;font:inherit;font-size:13px;box-sizing:border-box}
+  .rpt-f input:focus,.rpt-f textarea:focus{outline:none;border-color:var(--accent)}
+  .rpt-f textarea{resize:vertical;min-height:52px}
+  .rpt-sp{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid #d7ded9;border-radius:8px;background:#f7faf8}
+  .rpt-sp .nm{font-weight:600;font-size:13px}.rpt-sp .sci{font-style:italic;color:var(--muted);font-size:12px}
+  .rpt-sp .chg{margin-left:auto;border:1px solid #d7ded9;background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+  .rpt-srlist{border:1px solid #d7ded9;border-top:0;border-radius:0 0 8px 8px;max-height:190px;overflow:auto}
+  .rpt-srlist .it{padding:9px 10px;cursor:pointer;border-top:1px solid #f1f1ee;font-size:13px}
+  .rpt-srlist .it:hover,.rpt-srlist .it.on{background:#f1f6f3}
+  .rpt-srlist .it .sci{font-style:italic;color:var(--muted);font-size:12px;margin-left:6px}
+  .rpt-srlist .it .tg{float:right;font-size:11px;color:var(--faint)}
+  .rpt-map{height:232px;border:1px solid #d7ded9;border-radius:8px;overflow:hidden;background:#eef1ef}
+  .rpt-hint{font-size:11.5px;color:var(--faint);margin:5px 0 0}
+  .rpt-coord{font-size:12px;color:#256b48;font-weight:600;margin-top:5px;min-height:16px}
+  .rpt-submit{width:100%;border:0;border-radius:9px;padding:12px;font:inherit;font-weight:700;font-size:14px;background:var(--accent);color:#fff;cursor:pointer;min-height:46px}
+  .rpt-submit:disabled{opacity:.5;cursor:default}
+  .rpt-msg{font-size:12.5px;margin-top:11px;padding:10px 12px;border-radius:8px;display:none;line-height:1.5}
+  .rpt-msg.err{display:block;background:#fdecea;color:#a03027}
+  .rpt-msg.ok{display:block;background:#eaf6ef;color:#256b48}
+  .rpt-gate{text-align:center;padding:14px 4px}
+  .rpt-gate p{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.6}
+  .rpt-gate .go{display:inline-block;border:0;border-radius:9px;padding:11px 20px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none}
+  .report-lk{cursor:pointer}
+  @media(max-width:880px){ .rpt-overlay{padding:0;align-items:flex-end} .rpt-modal{max-width:none;max-height:94vh;border-radius:14px 14px 0 0} }
 </style>
 <script src="config.js" onerror="window.VWORLD_KEY=window.VWORLD_KEY||''"></script>
 <script src="fg_analytics.js"></script>
@@ -1038,6 +1082,7 @@ function renderSpecies(sp){
     <div class="row"><div class="k">상세 정보 · 데이터 제보</div>
       <div class="links">
         <a class="lk primary" href="${NIBR(sp.k)}" target="_blank" rel="noopener noreferrer"><span><span class="t">한반도의 생물다양성</span><br><span class="d">국립생물자원관 종 상세 →</span></span></a>
+        <a class="lk report-lk" data-k="${sp.k}" role="button" tabindex="0" hidden><span><span class="t">이 곳에서 발견 제보</span><br><span class="d">관찰 위치·근거 URL로 발견공백 메우기 →</span></span></a>
         ${reportLink}
         ${(((window.__SPMEDIA_META__||{}).taxa||{})[sp.t]>=4)?`<a class="lk" href="quiz.html?mode=species&ktsn=${sp.k}"><span><span class="t">이 종 동정 연습</span><br><span class="d">유사종 사진과 비교하는 퀴즈 →</span></span></a>`:''}
       </div>
@@ -1047,6 +1092,7 @@ function renderSpecies(sp){
   sCard.querySelectorAll('.spview-tg [data-v]').forEach(b=>{ b.onclick=()=>setSpView(b.dataset.v); });
   renderSpView();                                        // 현재 뷰(발견/미발견)로 우측 표 + 지도
   if(window.fgWatch) window.fgWatch.decorate(sp.k);     // 관심 종 ☆ 버튼(로그인 시 활성)
+  if(window.fgReport) window.fgReport.decorateCard(sp); // 발견 제보 버튼(Supabase 설정 시 노출)
   if(window.innerWidth<=880) sCard.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function clearSelSpecies(){ selSpecies=null; selRegions=new Map(); GAPRES=null;
@@ -1146,6 +1192,177 @@ if(configured) onAuth(u=>{ user=u; W.clear();
   if(user) watchList().then(ks=>{ks.forEach(k=>W.add(k)); refresh();}).catch(refresh);
   else refresh();
 });
+</script>
+
+<!-- 발견 제보(Feature B) — 종·지도 핀·URL·발견일 → reports 테이블(본인 RLS). 미설정/미로그인 graceful. -->
+<script type="module">
+import { configured, onAuth, submitReport } from './fg_supabase.js';
+const SPIDX = window.__SPIDX__ || [];
+const overlay = document.getElementById('rptOverlay');
+const body = document.getElementById('rptBody');
+let user = null, selSp = null, latlon = null, rptMap = null, pinSrc = null;
+
+function todayStr(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// 종 카드의 '이 곳에서 발견 제보' 버튼 노출·배선(Supabase 설정 시)
+function decorateCard(sp){
+  const b=document.querySelector('.report-lk[data-k="'+(window.CSS&&CSS.escape?CSS.escape(sp.k):sp.k)+'"]');
+  if(!b) return;
+  if(!configured){ b.hidden=true; return; }
+  b.hidden=false;
+  b.onclick=()=>open(sp);
+  b.onkeydown=(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); open(sp); } };
+}
+
+function open(prefill){
+  selSp = prefill ? {k:prefill.k,n:prefill.n,s:prefill.s,t:prefill.t,g:prefill.g} : null;
+  latlon = null;
+  overlay.hidden = false;
+  document.body.style.overflow='hidden';
+  render();
+}
+function close(){
+  overlay.hidden = true;
+  document.body.style.overflow='';
+  if(location.hash==='#report'){ history.replaceState(null,'',location.pathname+location.search); }
+}
+
+function render(){
+  if(!configured){ body.innerHTML='<div class="rpt-gate"><p>제보 기능이 아직 활성화되지 않았습니다.</p></div>'; return; }
+  if(!user){
+    body.innerHTML='<div class="rpt-gate"><p>발견 제보는 로그인 후 이용할 수 있습니다.<br>관심 종 저장·내 제보 이력도 함께 제공됩니다.</p>'+
+      '<a class="go" href="index.html#my">로그인하러 가기</a></div>';
+    return;
+  }
+  const eg = selSp && (selSp.g==='I'||selSp.g==='II');
+  body.innerHTML =
+    '<div class="rpt-f" id="rptSpWrap"></div>'+
+    (eg?'<div class="rpt-hint" style="margin:-6px 0 12px;color:#a06a1a">멸종위기 야생생물 — 정확한 위치는 공개 피드에 노출되지 않습니다.</div>':'')+
+    '<div class="rpt-f"><label>발견 위치 <span class="req">*</span> — 지도를 클릭해 지점을 찍으세요</label>'+
+      '<div class="rpt-map" id="rptMap"></div><div class="rpt-coord" id="rptCoord"></div></div>'+
+    '<div class="rpt-f"><label>발견일 <span class="req">*</span></label><input type="date" id="rptDate" max="'+todayStr()+'" value="'+todayStr()+'"></div>'+
+    '<div class="rpt-f"><label>관찰 근거 URL <span class="req">*</span> — 사진·관찰기록 링크</label><input type="url" id="rptUrl" placeholder="https://..." inputmode="url"></div>'+
+    '<div class="rpt-f"><label>메모 (선택)</label><textarea id="rptNote" placeholder="개체수·서식환경 등"></textarea></div>'+
+    '<button class="rpt-submit" id="rptSubmit" type="button">제보 등록</button>'+
+    '<div class="rpt-msg" id="rptMsg"></div>';
+  renderSp();
+  initMap();
+  const su=document.getElementById('rptSubmit');
+  su.onclick=doSubmit;
+  ['rptUrl','rptDate'].forEach(id=>document.getElementById(id).addEventListener('input',updateSubmit));
+  updateSubmit();
+}
+
+function renderSp(){
+  const w=document.getElementById('rptSpWrap'); if(!w) return;
+  if(selSp){
+    w.innerHTML='<label>대상 종</label><div class="rpt-sp"><div style="min-width:0">'+
+      '<span class="nm">'+esc(selSp.n||selSp.s)+'</span> <span class="sci">'+esc(selSp.s)+'</span></div>'+
+      '<button class="chg" type="button">변경</button></div>';
+    w.querySelector('.chg').onclick=()=>{ selSp=null; renderSp(); updateSubmit(); };
+  } else {
+    w.innerHTML='<label>종 <span class="req">*</span></label>'+
+      '<input type="search" id="rptSpSearch" placeholder="국명·학명 검색(예: 수달, Lutra)" autocomplete="off">'+
+      '<div class="rpt-srlist" id="rptSpList" hidden></div>';
+    const inp=document.getElementById('rptSpSearch'), list=document.getElementById('rptSpList');
+    inp.addEventListener('input',()=>{
+      const qq=inp.value.trim().toLowerCase();
+      if(qq.length<1){ list.hidden=true; list.innerHTML=''; return; }
+      const hits=[];
+      for(let i=0;i<SPIDX.length && hits.length<8;i++){ const x=SPIDX[i];
+        if((x.n&&x.n.toLowerCase().includes(qq))||(x.s&&x.s.toLowerCase().includes(qq))) hits.push(x); }
+      if(!hits.length){ list.hidden=true; list.innerHTML=''; return; }
+      list.innerHTML=hits.map(x=>'<div class="it" data-k="'+esc(x.k)+'">'+esc(x.n||x.s)+'<span class="sci">'+esc(x.s)+'</span></div>').join('');
+      list.hidden=false;
+      list.querySelectorAll('.it').forEach(it=>it.onclick=()=>{
+        const x=SPIDX.find(s=>s.k===it.dataset.k);
+        if(x){ selSp={k:x.k,n:x.n,s:x.s,t:x.t,g:x.g}; renderSp(); updateSubmit(); }
+      });
+    });
+    inp.focus();
+  }
+}
+
+function initMap(){
+  const el=document.getElementById('rptMap'); if(!el || typeof ol==='undefined') return;
+  if(!pinSrc) pinSrc=new ol.source.Vector();
+  const pinLayer=new ol.layer.Vector({source:pinSrc, style:new ol.style.Style({
+    image:new ol.style.Circle({radius:7, fill:new ol.style.Fill({color:'#c0392b'}), stroke:new ol.style.Stroke({color:'#fff',width:2})}) })});
+  if(!rptMap){
+    rptMap=new ol.Map({target:el,
+      layers:[new ol.layer.Tile({source:new ol.source.OSM({crossOrigin:'anonymous'})}), pinLayer],
+      controls:ol.control.defaults.defaults({attribution:false}),
+      view:new ol.View({center:ol.proj.fromLonLat([127.8,36.3]), zoom:6, minZoom:5, maxZoom:18})});
+    rptMap.on('singleclick',(e)=>{
+      const ll=ol.proj.toLonLat(e.coordinate); setPin(ll[0],ll[1]);
+    });
+  } else {
+    rptMap.setTarget(el);
+  }
+  pinSrc.clear();
+  const cc=document.getElementById('rptCoord'); if(cc) cc.textContent='';
+  rptMap.getView().setCenter(ol.proj.fromLonLat([127.8,36.3]));
+  rptMap.getView().setZoom(6);
+  setTimeout(()=>rptMap.updateSize(),60);
+}
+function setPin(lon,lat){
+  latlon={lon:+lon.toFixed(5), lat:+lat.toFixed(5)};
+  pinSrc.clear();
+  pinSrc.addFeature(new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat([latlon.lon,latlon.lat]))));
+  const cc=document.getElementById('rptCoord'); if(cc) cc.textContent='선택 위치: '+latlon.lat+', '+latlon.lon;
+  updateSubmit();
+}
+
+function validUrl(u){ return /^https?:\/\/.+/i.test(u); }
+function updateSubmit(){
+  const su=document.getElementById('rptSubmit'); if(!su) return;
+  const url=(document.getElementById('rptUrl')||{}).value||'';
+  const date=(document.getElementById('rptDate')||{}).value||'';
+  su.disabled = !(selSp && latlon && validUrl(url.trim()) && date);
+}
+async function doSubmit(){
+  const su=document.getElementById('rptSubmit'), msg=document.getElementById('rptMsg');
+  const url=document.getElementById('rptUrl').value.trim();
+  const date=document.getElementById('rptDate').value;
+  const note=document.getElementById('rptNote').value;
+  msg.className='rpt-msg';
+  if(!(selSp&&latlon&&validUrl(url)&&date)){ msg.className='rpt-msg err'; msg.textContent='종·위치·URL·발견일을 모두 입력하세요.'; return; }
+  su.disabled=true; su.textContent='등록 중…';
+  try{
+    const { error } = await submitReport({ ktsn:selSp.k, scientific_name:selSp.s, korean_name:selSp.n, taxon_group:selSp.t,
+      url, lat:latlon.lat, lon:latlon.lon, observed_date:date, note });
+    if(error) throw error;
+    msg.className='rpt-msg ok';
+    msg.textContent='제보가 등록되었습니다. 검토 후 반영됩니다. 마이데이터에서 내 제보 이력을 볼 수 있어요.';
+    su.textContent='닫기'; su.disabled=false; su.onclick=close;
+  }catch(e){
+    console.warn('제보 등록 실패', e);
+    msg.className='rpt-msg err';
+    msg.textContent='등록에 실패했습니다: '+((e&&e.message)||'알 수 없는 오류')+' — 잠시 후 다시 시도하세요.';
+    su.textContent='제보 등록'; su.disabled=false; su.onclick=doSubmit;
+  }
+}
+
+// 닫기(버튼·배경·ESC)
+document.getElementById('rptClose').onclick=close;
+overlay.addEventListener('click',(e)=>{ if(e.target===overlay) close(); });
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'&&!overlay.hidden) close(); });
+
+// #report 해시 진입(시민과학 탭 '제보하기' 딥링크)
+function checkHash(){ if(location.hash==='#report' && configured) open(null); }
+window.addEventListener('hashchange',checkHash);
+
+function refreshCardBtn(){                                // 이미 렌더된 종 카드 버튼 재배선(딥링크/인증 확정 후)
+  const b=document.querySelector('.report-lk[data-k]'); if(!b) return;
+  const x=SPIDX.find(s=>s.k===b.dataset.k); if(x) decorateCard(x);
+}
+window.fgReport={ configured, decorateCard, open };
+if(configured){
+  refreshCardBtn();
+  onAuth(u=>{ user=u; refreshCardBtn(); if(!overlay.hidden) render(); });
+  checkHash();
+}
 </script>
 </body>
 </html>

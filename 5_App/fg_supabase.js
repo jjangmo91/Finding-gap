@@ -49,3 +49,38 @@ export async function watchCounts() {
   return (data || []).map(r => ({ ktsn: r.ktsn, count: Number(r.watch_count) || 0 }))
                      .sort((a, b) => b.count - a.count);
 }
+
+// ── 시민과학 URL 제보(reports) — Feature B ──
+// user_id 는 DB default auth.uid() 로 자동 채움. 정밀 좌표는 원시 행(본인 RLS)에만 저장.
+// r = { ktsn, scientific_name, korean_name, taxon_group, url, lat, lon, observed_date, note }
+export async function submitReport(r) {
+  if (!sb) throw new Error('not configured');
+  return sb.from('reports').insert({
+    ktsn: r.ktsn,
+    scientific_name: r.scientific_name || null,
+    korean_name: r.korean_name || null,
+    taxon_group: r.taxon_group || null,
+    url: r.url,
+    lat: r.lat,
+    lon: r.lon,
+    observed_date: r.observed_date,
+    note: (r.note && r.note.trim()) || null
+  });
+}
+// 내 제보 이력(본인 행 — RLS)
+export async function myReports() {
+  if (!sb) return [];
+  const { data, error } = await sb.from('reports')
+    .select('id,ktsn,korean_name,scientific_name,taxon_group,url,lat,lon,observed_date,note,status,fills_gap,sigungu,created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+export async function deleteReport(id) { return sb.from('reports').delete().eq('id', id); }
+// 공개 커뮤니티 피드 — community_reports() RPC(좌표 미노출·거부 제외). 미배포/미설정이면 빈 배열.
+export async function communityReports(limit = 50) {
+  if (!sb) return [];
+  const { data, error } = await sb.rpc('community_reports', { lim: limit });
+  if (error) throw error;
+  return data || [];
+}

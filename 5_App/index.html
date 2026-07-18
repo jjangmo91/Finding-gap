@@ -167,15 +167,19 @@
       <h2>시민과학</h2>
       <p>시민과학자가 제보한 관측을 분류군별로 모아, 공식 조사에서 <b>아직 발견되지 않은 종</b>의 재발견 단서를 함께 봅니다. 공식 발견공백(조사정보)과는 분리된 자료로 표시됩니다.</p>
     </div>
+    <div class="ctarow">
+      <a class="btn cta" id="reportCta" href="service.html#report">＋ 발견 제보하기</a>
+      <span class="muted2">관찰한 종을 위치·근거 URL과 함께 제보해 발견공백을 메웁니다. 로그인이 필요합니다.</span>
+    </div>
+    <div class="authcard" id="feedCard" style="max-width:none">
+      <h3 style="margin:0 0 4px">최근 제보</h3>
+      <p class="muted2" style="margin:0 0 12px">시민과학자가 올린 최근 관찰 제보입니다 — 검토를 거쳐 재발견 후보로 반영됩니다. 정확한 위치는 공개되지 않습니다.</p>
+      <ol class="wl feedlist" id="feedList"><li class="muted2">불러오는 중…</li></ol>
+    </div>
     <div class="authcard" id="trendCard" style="max-width:none" hidden>
       <h3 style="margin:0 0 4px">많이 담긴 종</h3>
       <p class="muted2" style="margin:0 0 12px">이용자들이 관심 종으로 가장 많이 담은 종입니다 — 종별 익명 집계(개인 정보 없이 합계만).</p>
       <ol class="wl trendlist" id="trendList"><li class="muted2">불러오는 중…</li></ol>
-    </div>
-    <div class="soonbox">
-      <div class="v">곧 제공</div>
-      <div class="l">시민 제보 종합</div>
-      <div class="msg">제보는 <b>종 · 행정구역 · 연도</b>(선택 시 지도 위 좌표)로 기록하며 사진은 받지 않습니다. 미발견 종의 제보는 <b>재발견 후보</b>로 모아 검토를 거쳐 반영합니다.</div>
     </div>
   </section>
 
@@ -202,6 +206,11 @@
   .trendlist li{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .trendlist .rank{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;background:#eef3f1;color:#2f6f5e;border-radius:50%;font-size:12px;font-weight:700;flex:none}
   .trendlist .cnt{margin-left:auto;font-weight:700;color:#2f6f5e;white-space:nowrap}
+  .ctarow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+  .btn.cta{display:inline-flex;align-items:center;gap:6px;text-decoration:none;white-space:nowrap}
+  .btn.cta.sm{padding:7px 12px;font-size:13px}
+  .feedlist .fmeta{color:var(--muted);font-size:12px}
+  .feedlist .fnote{flex-basis:100%;color:#4a4f4c;font-size:12.5px;margin-top:2px;background:#f6f9f7;border-radius:6px;padding:6px 9px}
 </style>
 <script src="config.js" onerror="window.SUPABASE_URL=window.SUPABASE_URL||''"></script>
 <script src="fg_analytics.js"></script>
@@ -469,7 +478,8 @@ else Promise.all([
 
 <!-- 마이데이터(로그인·관심 종) — Supabase 설정(config.js)이 있을 때만 활성, 없으면 정적 안내 유지 -->
 <script type="module">
-import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts } from './fg_supabase.js';
+import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts, communityReports, myReports, deleteReport } from './fg_supabase.js';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const view=document.getElementById('view-my');
 const spName=k=>{ const sp=(window.__SPIDX__||[]).find(x=>x.k===k); return sp?{n:sp.n||sp.s,s:sp.s||'',t:sp.t||''}:{n:k,s:'',t:''}; };
 
@@ -495,6 +505,30 @@ async function renderTrending(){
         `<span class="cnt">${c.count}명</span>`;
       host.appendChild(li); });
   }catch(err){ host.innerHTML=`<li class="muted2">집계를 불러오지 못했습니다 (${err.message||err}).</li>`; }
+}
+
+// ── ② 시민 제보(reports) 렌더 — 공개 피드 + 마이데이터 내 제보 공용 ──
+const _RSTATUS={pending:['검토 중','#9a7b2f','#f5eede'], approved:['승인','#2f6f5e','#e7f1ee']};
+function statusBadge(s){ const m=_RSTATUS[s]||_RSTATUS.pending; return `<span class="dbadge" style="background:${m[2]};color:${m[1]}">${m[0]}</span>`; }
+function reportLine(r,mine){
+  const nm=r.korean_name||r.scientific_name||r.ktsn;
+  const sci=(r.scientific_name&&r.scientific_name!==nm)?`<span class="sci">${esc(r.scientific_name)}</span>`:'';
+  const gap=r.fills_gap?`<span class="dbadge" style="background:#e7f1ee;color:#2f6f5e">공백 메움</span>`:'';
+  const who=mine?'':(r.reporter?' · '+esc(r.reporter):' · 익명');
+  const link=/^https?:\/\//i.test(r.url||'')?`<a class="muted2" href="${esc(r.url)}" target="_blank" rel="noopener nofollow ugc" style="margin-left:8px">근거 →</a>`:'';
+  const del=mine?`<button class="rm" title="삭제">✕ 삭제</button>`:'';
+  const note=r.note?`<div class="fnote">${esc(r.note)}</div>`:'';
+  return `<span class="nm">${esc(nm)}</span> ${sci} ${statusBadge(r.status)}${gap}`+
+    `<span class="fmeta">${esc(r.observed_date||'')}${who}</span>${link}${del}${note}`;
+}
+async function renderFeed(){
+  const host=document.getElementById('feedList'); if(!host) return;
+  try{
+    const rows=await communityReports(30);
+    if(!rows.length){ host.innerHTML='<li class="muted2">아직 제보가 없습니다. 위 <b>발견 제보하기</b>로 첫 제보를 남겨 보세요.</li>'; return; }
+    host.innerHTML='';
+    rows.forEach(r=>{ const li=document.createElement('li'); li.innerHTML=reportLine(r,false); host.appendChild(li); });
+  }catch(err){ host.innerHTML=`<li class="muted2">피드를 불러오지 못했습니다 (${esc(err.message||String(err))}).</li>`; }
 }
 
 function loginCard(){
@@ -534,10 +568,27 @@ async function myPage(user){
       <button class="btn sec" id="logoutBtn" style="margin-left:auto">로그아웃</button></div>
     <div class="muted2" id="wlSummary" style="margin:4px 0 10px">내가 담은 종이 전국에서 최근 발견됐는지 보여줍니다.</div>
     <ul class="wl" id="wl"><li class="muted2">불러오는 중…</li></ul>
-    <h3 style="margin:18px 0 0">내 제보</h3>
-    <p class="muted2" style="margin-top:6px">제보 기능은 다음 단계에서 추가됩니다.</p>
+    <div style="display:flex;align-items:center;gap:10px;margin:18px 0 0">
+      <h3 style="margin:0">내 제보</h3>
+      <a class="btn cta sm" href="service.html#report" style="margin-left:auto">＋ 발견 제보하기</a>
+    </div>
+    <ul class="wl feedlist" id="myrep" style="margin-top:10px"><li class="muted2">불러오는 중…</li></ul>
   </div>`;
   view.querySelector('#logoutBtn').onclick=async()=>{ await signOut(); };
+  (async()=>{                                              // 내 제보 이력(본인 RLS)
+    const mr=view.querySelector('#myrep'); if(!mr) return;
+    try{
+      const rows=await myReports();
+      if(!rows.length){ mr.innerHTML='<li class="muted2">아직 제보한 관찰이 없습니다.</li>'; return; }
+      mr.innerHTML='';
+      rows.forEach(r=>{ const li=document.createElement('li'); li.innerHTML=reportLine(r,true);
+        const d=li.querySelector('.rm'); if(d) d.onclick=async()=>{ d.disabled=true;
+          try{ const {error}=await deleteReport(r.id); if(error) throw error; li.remove();
+            if(!mr.children.length) mr.innerHTML='<li class="muted2">아직 제보한 관찰이 없습니다.</li>'; }
+          catch(e){ d.disabled=false; alert('삭제 실패: '+(e.message||e)); } };
+        mr.appendChild(li); });
+    }catch(err){ mr.innerHTML=`<li class="authmsg err">내 제보 로드 실패: ${esc(err.message||String(err))}</li>`; }
+  })();
   const ul=view.querySelector('#wl');
   try{
     const ks=await watchList();
@@ -557,7 +608,7 @@ async function myPage(user){
   }catch(err){ ul.innerHTML=`<li class="authmsg err">관심 종 로드 실패: ${err.message||err}</li>`; }
 }
 
-if(configured){ onAuth(user=> user ? myPage(user) : loginCard()); renderTrending(); }
+if(configured){ onAuth(user=> user ? myPage(user) : loginCard()); renderTrending(); renderFeed(); }
 </script>
 </body>
 </html>
