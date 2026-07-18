@@ -56,6 +56,7 @@
   .tblwrap{overflow:auto}
   table{border-collapse:collapse;width:100%;font-size:12.5px}
   th,td{padding:7px 10px;text-align:left;border-bottom:1px solid #f1f1ee;white-space:nowrap}
+  #tbl th,#tbl td{padding:7px 6px}                         /* 6열 수용 위해 종 목록만 가로 패딩 축소 */
   th{position:sticky;top:0;background:#fbfbfa;cursor:pointer;font-size:11.5px;color:#555;user-select:none;z-index:1}
   tbody tr.rowlink{cursor:pointer}
   tbody tr.rowlink:hover{background:#f1f6f3}
@@ -70,6 +71,26 @@
   .st{display:inline-flex;align-items:center;gap:4px;font-size:11.5px}
   .dot{width:7px;height:7px;border-radius:999px;display:inline-block}
   .num{font-variant-numeric:tabular-nums;text-align:right}
+  /* 관심도 셀: 미니 막대 + 수치 */
+  td.ivcell{white-space:nowrap}
+  .ivbar{display:inline-block;vertical-align:middle;width:34px;height:5px;background:#eef1f0;border-radius:3px;overflow:hidden;margin-right:5px}
+  .ivbar>span{display:block;height:100%;background:#6a9a86}
+  @media(min-width:881px){                                /* 데스크톱: 6열이 좁은 패널(~570px)에 들어가도록 이름열 말줄임(전체는 hover·종페이지) */
+    #tbl td:nth-child(1){max-width:118px;overflow:hidden;text-overflow:ellipsis}
+    #tbl td:nth-child(2){max-width:132px;overflow:hidden;text-overflow:ellipsis}
+  }
+  /* 주목할 미발견 종 추천 스트립 */
+  .recstrip{padding:9px 14px 4px;border-bottom:1px solid var(--line);background:#fcfdfc}
+  .recstrip .rec-h{font-size:11.5px;font-weight:600;color:#4f6f61;margin-bottom:7px}
+  .recstrip .rec-h .rec-sub{font-weight:400;color:var(--faint);margin-left:6px}
+  .rec-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .rec-chip{appearance:none;cursor:pointer;border:1px solid #dfe7e2;background:#fff;border-radius:999px;
+    padding:5px 11px;font-size:12px;color:#3a4a43;display:inline-flex;align-items:center;gap:7px;max-width:100%}
+  .rec-chip:hover{border-color:#9ec3b2;background:#f4f9f6}
+  .rec-chip .rc-n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+  .rec-chip .rc-n .sci{font-style:italic;font-weight:600;color:#5a5f5c}
+  .rec-chip .rc-iv{width:34px;height:5px;background:#eef1f0;border-radius:3px;overflow:hidden;flex:none}
+  .rec-chip .rc-iv>span{display:block;height:100%;background:#6a9a86}
   /* mode B */
   .searchrow{display:flex;gap:10px;align-items:center;margin-bottom:6px}
   .searchrow input{flex:1;max-width:440px}
@@ -204,7 +225,10 @@
     #tbl td:nth-child(3),#tbl td:nth-child(4){margin-right:6px}
     #tbl td:nth-child(5){display:block;margin-top:8px;color:var(--muted);font-size:12px;text-align:left}
     #tbl td:nth-child(5):empty{display:none}
-    #tbl td:nth-child(5):not(:empty)::before{content:"관측 ";color:var(--faint)}
+    #tbl td:nth-child(5):not(:empty)::before{content:"관심도 ";color:var(--faint)}
+    #tbl td:nth-child(6){display:block;margin-top:4px;color:var(--muted);font-size:12px;text-align:left}
+    #tbl td:nth-child(6):empty{display:none}
+    #tbl td:nth-child(6):not(:empty)::before{content:"관측 ";color:var(--faint)}
     #tbl tbody tr:not(.rowlink) td{display:block;padding:10px;white-space:normal}
     /* 국명 없는 종: td1이 학명(.sci) → td2 학명 중복 숨김(:has 미지원 브라우저는 기존대로) */
     #tbl tbody tr.rowlink td:nth-child(1):has(.sci)+td:nth-child(2){display:none}
@@ -278,6 +302,7 @@
       </div>
       <div class="panel">
         <h2>종 목록 <span class="cnt" id="tblCnt"></span><button class="dl" id="dlCsv">CSV</button></h2>
+        <div class="recstrip" id="recStrip" hidden></div>
         <div class="tblwrap"><table id="tbl"></table></div>
       </div>
     </div>
@@ -377,6 +402,7 @@ function loadTaxon(t, cb){
 const TAXA=(window.__TAXA__||[]).filter(t=>t.has_data); // 데이터 보유 분류군만 노출
 const SPIDX=window.__SPIDX__||[];                       // 서비스 종 인덱스(제외종 반영)
 function interestOf(k){return ((window.__SPINT__||{})[k]||0)/1000;}   // 관심도 0~1(층 내 백분위; 자산 없으면 0)
+function ivCell(iv){const p=Math.round((iv||0)*100);return p>0?`<span class="ivbar" aria-hidden="true"><span style="width:${p}%"></span></span>${p}`:'';}
 const KEY=window.VWORLD_KEY||'';
 const ROWCAP=1500;                                      // 대용량 분류군 테이블 표시 상한(전체는 CSV)
 const SP_BY_TAX={};                                     // 분류군 → 종목록(검색 인덱스 파생)
@@ -775,6 +801,7 @@ function tableRows(){
   rows.sort((a,b)=>{
     let d=0;
     if(sortKey==='c') d=a.c-b.c;
+    else if(sortKey==='iv') d=a.iv-b.iv;                 // 내림차순=관심도 높은 종 먼저
     else if(sortKey==='g') d=egr(b.g)-egr(a.g);          // 내림차순=I급 먼저
     else if(sortKey==='r') d=rlr(b.r)-rlr(a.r);          // 내림차순=EX(심각) 먼저
     else d=String(a[sortKey]||'').localeCompare(String(b[sortKey]||''),'ko');
@@ -782,8 +809,23 @@ function tableRows(){
   });
   return rows;
 }
+function renderRecStrip(all){                              // 주목할 미발견 종: 이 범위에서 미기록 + 관심도 상위
+  const el=document.getElementById('recStrip'); if(!el)return;
+  const top=all.filter(r=>!r.found && r.iv>0).sort((a,b)=> b.iv-a.iv || (a.n||a.s).localeCompare(b.n||b.s,'ko')).slice(0,6);
+  if(top.length<2){ el.hidden=true; el.innerHTML=''; return; }
+  const reg=selSidos.size?[...selSidos].map(rname).join('·'):'전국';
+  const chips=top.map(x=>{
+    const nm=x.n?`<span class="rc-n">${x.n}</span>`:`<span class="rc-n"><span class="sci">${x.s}</span></span>`;
+    const p=Math.round(x.iv*100);
+    return `<button class="rec-chip" onclick="openSpecies('${x.k}')" title="${x.n?x.n+' · ':''}${x.s} — 관심도 ${p}, ${reg} 미발견 · 종별 검색으로 보기 →">`+
+      `${nm}<span class="rc-iv" aria-hidden="true"><span style="width:${p}%"></span></span></button>`;
+  }).join('');
+  el.innerHTML=`<div class="rec-h">주목할 미발견 종 <span class="rec-sub">${reg}에서 아직 기록 없는 관심도 높은 종</span></div><div class="rec-chips">${chips}</div>`;
+  el.hidden=false;
+}
 function renderTable(){
   const all=tableRows();
+  renderRecStrip(all);
   const foundN=all.filter(r=>r.found).length, gapN=all.length-foundN;
   const rows= metric==='found' ? all.filter(r=>r.found) : all.filter(r=>!r.found);   // 토글로 발견/미발견만 표시
   tblCnt.textContent=`발견 ${nf(foundN)} · 미발견 ${nf(gapN)} / 총 ${nf(all.length)}종 — 표시: ${metric==='found'?'발견':'미발견'} ${nf(rows.length)}종`;
@@ -793,15 +835,16 @@ function renderTable(){
     <th scope="col" onclick="sortBy('s')" title="학명으로 정렬">학명${ar('s')}</th>
     <th scope="col" onclick="sortBy('g')" title="멸종위기 야생생물 등급으로 정렬(I급 먼저)">멸종위기종${ar('g')}</th>
     <th scope="col" onclick="sortBy('r')" title="국가적색목록 범주로 정렬(심각도 순)">국가적색목록${ar('r')}</th>
+    <th scope="col" onclick="sortBy('iv')" class="num" title="관심도로 정렬 — 분류군·희소도 층 내 백분위(관측·한국어 위키·관심종)">관심도${ar('iv')}</th>
     <th scope="col" onclick="sortBy('c')" class="num" title="관측 수로 정렬">관측${ar('c')}</th></tr></thead>`;
   const shown=rows.slice(0,ROWCAP);
   const body=shown.map(x=>
     `<tr class="rowlink" onclick="openSpecies('${x.k}')" title="종별 검색으로 보기 →">`+
-      `<td>${x.n||'<span class="sci">'+x.s+'</span>'}</td><td><span class="sci">${x.s}</span></td>`+
-      `<td>${egBadge(x.g)}</td><td>${rlBadge(x.r)}</td><td class="num">${x.c||''}</td></tr>`
+      `<td title="${(x.n||x.s).replace(/"/g,'&quot;')}">${x.n||'<span class="sci">'+x.s+'</span>'}</td><td title="${x.s.replace(/"/g,'&quot;')}"><span class="sci">${x.s}</span></td>`+
+      `<td>${egBadge(x.g)}</td><td>${rlBadge(x.r)}</td><td class="num ivcell">${ivCell(x.iv)}</td><td class="num">${x.c||''}</td></tr>`
   ).join('');
   const more=rows.length>ROWCAP
-    ? `<tr><td colspan="5" style="padding:10px;color:#888;background:#fbfbfa;white-space:normal">상위 ${nf(ROWCAP)}행만 표시 — 전체 ${nf(rows.length)}종은 CSV 다운로드로 확인하세요.</td></tr>`
+    ? `<tr><td colspan="6" style="padding:10px;color:#888;background:#fbfbfa;white-space:normal">상위 ${nf(ROWCAP)}행만 표시 — 전체 ${nf(rows.length)}종은 CSV 다운로드로 확인하세요.</td></tr>`
     : '';
   tbl.innerHTML=head+'<tbody>'+body+more+'</tbody>';
 }
@@ -810,9 +853,9 @@ function sortBy(k){ if(sortKey===k)sortDir*=-1; else {sortKey=k;sortDir=(k==='n'
 function downloadCSV(){
   const all=tableRows();
   const rows= metric==='found' ? all.filter(r=>r.found) : all.filter(r=>!r.found);   // 화면 필터와 동일
-  const head=['국명','학명','멸종위기등급','적색목록','관측수'];
+  const head=['국명','학명','멸종위기등급','적색목록','관심도','관측수'];
   const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const body=rows.map(x=>[x.n,x.s,x.g?x.g+'급':'',x.r,x.c].map(esc).join(','));
+  const body=rows.map(x=>[x.n,x.s,x.g?x.g+'급':'',x.r,Math.round((x.iv||0)*100),x.c].map(esc).join(','));
   const csv='﻿'+[head.join(','),...body].join('\r\n');
   const reg=selSidos.size?[...selSidos].map(rname).join('+'):'전국';
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
