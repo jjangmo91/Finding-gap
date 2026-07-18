@@ -171,10 +171,20 @@
       <a class="btn cta" id="reportCta" href="service.html#report">＋ 발견 제보하기</a>
       <span class="muted2">관찰한 종을 위치·근거 URL과 함께 제보해 발견공백을 메웁니다. 로그인이 필요합니다.</span>
     </div>
+    <div class="authcard" id="missionCard" style="max-width:none">
+      <h3 style="margin:0 0 4px">유망 공백 미션</h3>
+      <p class="muted2" style="margin:0 0 12px">특정 지역에서 아직 기록되지 않은 멸종위기종입니다 — 찾아서 제보하면 발견공백을 메웁니다.</p>
+      <div class="missions" id="missionList"></div>
+    </div>
     <div class="authcard" id="feedCard" style="max-width:none">
       <h3 style="margin:0 0 4px">최근 제보</h3>
       <p class="muted2" style="margin:0 0 12px">시민과학자가 올린 최근 관찰 제보입니다 — 검토를 거쳐 재발견 후보로 반영됩니다. 정확한 위치는 공개되지 않습니다.</p>
       <ol class="wl feedlist" id="feedList"><li class="muted2">불러오는 중…</li></ol>
+    </div>
+    <div class="authcard" id="lbCard" style="max-width:none">
+      <h3 style="margin:0 0 4px">제보 리더보드</h3>
+      <p class="muted2" style="margin:0 0 12px">발견공백을 많이 메운 시민과학자입니다 — 익명 집계(개인 정보 없이 합계만).</p>
+      <ol class="wl lblist" id="lbList"><li class="muted2">불러오는 중…</li></ol>
     </div>
     <div class="authcard" id="trendCard" style="max-width:none" hidden>
       <h3 style="margin:0 0 4px">많이 담긴 종</h3>
@@ -211,6 +221,19 @@
   .btn.cta.sm{padding:7px 12px;font-size:13px}
   .feedlist .fmeta{color:var(--muted);font-size:12px}
   .feedlist .fnote{flex-basis:100%;color:#4a4f4c;font-size:12.5px;margin-top:2px;background:#f6f9f7;border-radius:6px;padding:6px 9px}
+  .missions{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .mission{display:block;text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);color:inherit}
+  .mission:hover{border-color:#9ec3b2;background:#f6f9f7}
+  .mission .mrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .mission .mnm{font-weight:600;font-size:13.5px}
+  .mission .msci{font-style:italic;color:var(--muted);font-size:12px;margin:2px 0 4px}
+  .mission .mreg{font-size:11.5px;color:#4f6f61}
+  .lblist li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lblist .rank{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;background:#eef3f1;color:#2f6f5e;border-radius:50%;font-size:12px;font-weight:700;flex:none}
+  .lblist .cnt{margin-left:auto;font-weight:600;color:#2f6f5e;white-space:nowrap;font-size:12.5px}
+  .btn.sm{padding:5px 12px;font-size:12px}
+  .btn.sm.rej{background:#f3eeee;color:#a03027}
+  .admbtns{margin-left:auto;display:inline-flex;gap:6px;flex:none}
 </style>
 <script src="config.js" onerror="window.SUPABASE_URL=window.SUPABASE_URL||''"></script>
 <script src="fg_analytics.js"></script>
@@ -218,6 +241,7 @@
 <script src="demo/data/species_index.js"></script>
 <script src="demo/data/species_state.js"></script>
 <script src="demo/data/media_meta.js"></script>
+<script src="demo/data/missions.js" onerror="window.__MISSIONS__=window.__MISSIONS__||[]"></script>
 <script>
 /* ── 디자인 토큰(범주색) ── */
 const RL_FILL={EX:'#000000',EW:'#3D2645',RE:'#6B4E71',CR:'#D81E05',EN:'#FC7F3F',
@@ -478,7 +502,7 @@ else Promise.all([
 
 <!-- 마이데이터(로그인·관심 종) — Supabase 설정(config.js)이 있을 때만 활성, 없으면 정적 안내 유지 -->
 <script type="module">
-import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts, communityReports, myReports, deleteReport } from './fg_supabase.js';
+import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts, communityReports, myReports, deleteReport, leaderboard, myRole, adminPendingReports, setReportStatus } from './fg_supabase.js';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const view=document.getElementById('view-my');
 const spName=k=>{ const sp=(window.__SPIDX__||[]).find(x=>x.k===k); return sp?{n:sp.n||sp.s,s:sp.s||'',t:sp.t||''}:{n:k,s:'',t:''}; };
@@ -531,6 +555,34 @@ async function renderFeed(){
   }catch(err){ host.innerHTML=`<li class="muted2">피드를 불러오지 못했습니다 (${esc(err.message||String(err))}).</li>`; }
 }
 
+// ── ③ 유망 공백 미션보드(정적 자산 __MISSIONS__) ──
+function renderMissions(){
+  const host=document.getElementById('missionList'); if(!host) return;
+  const ms=(window.__MISSIONS__||[]).slice(0,12);
+  if(!ms.length){ host.innerHTML='<div class="muted2">미션 데이터를 불러오지 못했습니다.</div>'; return; }
+  host.innerHTML=ms.map(m=>{
+    const g=m.grade?`<span class="dbadge" style="background:#fbe9e7;color:#b23b2e">멸종위기 ${esc(m.grade)}급</span>`:'';
+    return `<a class="mission" href="service.html#report" title="${esc(m.name)} 제보하기">`+
+      `<div class="mrow"><span class="mnm">${esc(m.name)}</span>${g}</div>`+
+      `<div class="msci">${esc(m.sci)}</div>`+
+      `<div class="mreg">${esc(m.region_name)}에서 미발견 · 찾아서 제보 →</div></a>`;
+  }).join('');
+}
+
+// ── ④ 제보 리더보드(report_leaderboard RPC) ──
+async function renderLeaderboard(){
+  const host=document.getElementById('lbList'); if(!host) return;
+  try{
+    const rows=await leaderboard(15);
+    if(!rows.length){ host.innerHTML='<li class="muted2">아직 제보가 없습니다. 첫 제보의 주인공이 되어 보세요.</li>'; return; }
+    host.innerHTML='';
+    rows.forEach((r,i)=>{ const li=document.createElement('li');
+      li.innerHTML=`<span class="rank">${i+1}</span><span class="nm">${esc(r.reporter)}</span>`+
+        `<span class="cnt">공백 ${r.gaps} · 제보 ${r.reports}</span>`;
+      host.appendChild(li); });
+  }catch(err){ host.innerHTML=`<li class="muted2">리더보드를 불러오지 못했습니다 (${esc(err.message||String(err))}).</li>`; }
+}
+
 function loginCard(){
   view.innerHTML=`
   <div class="vintro"><h2>마이데이터</h2><p>로그인하면 <b>관심 종</b>을 저장하고, 내가 제보한 관측 이력을 한곳에서 모아 봅니다.</p></div>
@@ -573,8 +625,32 @@ async function myPage(user){
       <a class="btn cta sm" href="service.html#report" style="margin-left:auto">＋ 발견 제보하기</a>
     </div>
     <ul class="wl feedlist" id="myrep" style="margin-top:10px"><li class="muted2">불러오는 중…</li></ul>
+  </div>
+  <div class="authcard" id="adminCard" style="max-width:none;display:none;margin-top:14px">
+    <h3 style="margin:0 0 4px">관리자 · 제보 검토</h3>
+    <p class="muted2" style="margin:0 0 12px">검토 대기 제보를 승인/거부합니다. 승인 제보는 다음 재빌드에 <b>시민 재발견</b>으로 반영됩니다.</p>
+    <ul class="wl feedlist" id="adminList"><li class="muted2">불러오는 중…</li></ul>
   </div>`;
   view.querySelector('#logoutBtn').onclick=async()=>{ await signOut(); };
+  (async()=>{                                              // 관리자 검토 큐(role='admin'만 — RLS 로 비관리자는 빈 결과)
+    let role=null; try{ role=await myRole(); }catch(_){}
+    if(role!=='admin') return;
+    const card=view.querySelector('#adminCard'), al=view.querySelector('#adminList'); if(!card) return;
+    card.style.display='';
+    try{
+      const rows=await adminPendingReports();
+      if(!rows.length){ al.innerHTML='<li class="muted2">검토 대기 제보가 없습니다.</li>'; return; }
+      al.innerHTML='';
+      rows.forEach(r=>{ const li=document.createElement('li');
+        li.innerHTML=reportLine(r,false)+
+          `<span class="admbtns"><button class="btn sm" data-a="approved">승인</button><button class="btn sm rej" data-a="rejected">거부</button></span>`;
+        li.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{ b.disabled=true;
+          try{ const {error}=await setReportStatus(r.id,b.dataset.a); if(error) throw error; li.remove();
+            if(!al.children.length) al.innerHTML='<li class="muted2">검토 대기 제보가 없습니다.</li>'; }
+          catch(e){ b.disabled=false; alert('처리 실패: '+(e.message||e)); } });
+        al.appendChild(li); });
+    }catch(err){ al.innerHTML=`<li class="authmsg err">검토 목록 로드 실패: ${esc(err.message||String(err))}</li>`; }
+  })();
   (async()=>{                                              // 내 제보 이력(본인 RLS)
     const mr=view.querySelector('#myrep'); if(!mr) return;
     try{
@@ -608,7 +684,8 @@ async function myPage(user){
   }catch(err){ ul.innerHTML=`<li class="authmsg err">관심 종 로드 실패: ${err.message||err}</li>`; }
 }
 
-if(configured){ onAuth(user=> user ? myPage(user) : loginCard()); renderTrending(); renderFeed(); }
+renderMissions();                                          // 정적 자산 — Supabase 무관
+if(configured){ onAuth(user=> user ? myPage(user) : loginCard()); renderTrending(); renderFeed(); renderLeaderboard(); }
 </script>
 </body>
 </html>

@@ -239,6 +239,23 @@ def test_region_profile_consistency():
     assert pr["recorded"] + pr["undiscovered"] == pr["total"]
 
 
+def test_community_discoveries_structure():
+    r = tools.community_discoveries(limit=5)
+    assert r["level"] == "community"
+    assert isinstance(r["records"], list) and r["count"] == len(r["records"])
+    assert "note" in r
+    vals = [x["count"] for x in r["records"]]
+    assert vals == sorted(vals, reverse=True)              # count 내림차순(있으면)
+    for x in r["records"]:                                  # 좌표·개인정보 미노출 불변식
+        assert not any(f in x for f in ("lat", "lon", "url", "user_id"))
+
+
+def test_community_discoveries_filters():
+    # region/taxon 필터가 스키마 오류 없이 동작(빈 결과라도)
+    assert tools.community_discoveries(region="11")["level"] == "community"
+    assert tools.community_discoveries(taxon_group="MM")["level"] == "community"
+
+
 def _run_all():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

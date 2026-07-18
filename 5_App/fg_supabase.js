@@ -84,3 +84,26 @@ export async function communityReports(limit = 50) {
   if (error) throw error;
   return data || [];
 }
+// 리더보드 — report_leaderboard() RPC(제보자별 익명 집계: 제보 수·공백 메움 수)
+export async function leaderboard(limit = 20) {
+  if (!sb) return [];
+  const { data, error } = await sb.rpc('report_leaderboard', { lim: limit });
+  if (error) throw error;
+  return (data || []).map(r => ({ reporter: r.reporter, reports: Number(r.reports) || 0, gaps: Number(r.gaps_filled) || 0 }));
+}
+// 내 역할(profiles.role) — 관리자 UI 게이트용. 비로그인/미설정이면 null.
+export async function myRole() {
+  if (!sb) return null;
+  const { data } = await sb.from('profiles').select('role').maybeSingle();
+  return data ? data.role : null;
+}
+// 관리자 전용 — RLS(role='admin')로 비관리자는 빈 결과. 검토 대기 제보 목록.
+export async function adminPendingReports() {
+  if (!sb) return [];
+  const { data, error } = await sb.from('reports')
+    .select('id,ktsn,korean_name,scientific_name,taxon_group,url,lat,lon,observed_date,note,status,fills_gap,sigungu,created_at')
+    .eq('status', 'pending').order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+export async function setReportStatus(id, status) { return sb.from('reports').update({ status }).eq('id', id); }

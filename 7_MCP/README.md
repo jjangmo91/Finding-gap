@@ -8,7 +8,7 @@
 - 데이터: `data/fg_mcp.sqlite.gz`(약 18MB, 커밋됨) — 서버가 최초 실행 시 로컬 sqlite로 해제
 - 비상업 용도(NIBR=KOGL 공공누리, iNat=CC 비상업·귀속)
 
-## 도구 (14)
+## 도구 (15)
 
 | 도구 | 설명 |
 |------|------|
@@ -22,6 +22,7 @@
 | `taxa_summary()` | 9개 분류군별 종수·발견/휴면/미발견·위협종 수 |
 | `interest_ranking(taxon_group?, redlist_category?, level?, limit?)` | 관심도 순위(level='species'|'taxon') |
 | `trending_species(taxon_group?, redlist_category?, limit?)` | 가장 많이 관심종으로 담긴 종(watchlist 익명 집계) — 집단 대중 관심. 미수집 시 빈 목록 |
+| `community_discoveries(region?, taxon_group?, limit?)` | 관리자 **승인된 시민 제보**(재발견·신규)를 종×시군구 익명 집계 — 좌표·개인정보 미노출. 승인 제보 없으면 빈 목록 |
 | `get_interest(ktsn)` | 종 관심도 상세 — 층(분류군×적색목록) 내 관측·한국어위키·사용자 신호와 순위(ko/en 조회수·관심종 집계수 병기) |
 | `get_species_bioclim(ktsn, variables?)` | 종의 환경지위(bio01/05/06/12·dem·ndvi/ndwi) |
 | `get_species_media(ktsn, media_type?, limit?)` | 종 미디어(사진·도판·영상 URL·라이선스·출처) |
@@ -71,8 +72,9 @@ cd 7_MCP && .venv/Scripts/python -m finding_gap_mcp
 
 ```bash
 python 7_MCP/build_wiki_interest.py     # 한국어 위키 조회수 재수집(12개월 창) → wiki_pageviews.json  (월 1회 권장)
-python 7_MCP/build_watch_snapshot.py    # (선택) 관심종 익명 집계 → watch_counts.json (RLS/service_role 필요)
-python 7_MCP/build_mcp_data.py          # 1_Data/processed(+위키·관심종) → data/fg_mcp.sqlite.gz 갱신·커밋
+python 7_MCP/build_watch_snapshot.py    # (선택) 관심종 익명 집계 → watch_counts.json (publishable 키 RPC)
+python 7_MCP/build_community_snapshot.py # (선택) 승인 제보 익명 집계 → community_reports.json (approved_discoveries RPC)
+python 7_MCP/build_mcp_data.py          # 1_Data/processed(+위키·관심종·커뮤니티) → data/fg_mcp.sqlite.gz 갱신·커밋
 ```
 관측·환경 ETL은 6개월, 위키 조회수는 월 주기. 스키마·관심도 산식·대안신호 배제 근거·라이선스는 [`MCP_DATA_CONTRACT.md`](MCP_DATA_CONTRACT.md).
 

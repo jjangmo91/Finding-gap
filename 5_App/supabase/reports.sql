@@ -70,3 +70,41 @@ comment on table public.reports is
   '시민과학 URL 제보(Feature B). 본인 행 RLS. 정밀 좌표는 원시 테이블에만 — 공개는 community_reports() 로 좌표 없이.';
 comment on function public.community_reports(int) is
   '공개 커뮤니티 제보 피드. 좌표 미노출·거부 제외·제보자는 display_name(없으면 NULL).';
+
+-- ── P3 리더보드: 제보자별 익명 집계(제보 수·공백 메움 수) ──
+create or replace function public.report_leaderboard(lim int default 20)
+returns table(reporter text, reports bigint, gaps_filled bigint)
+language sql security definer set search_path = public stable as $$
+  select coalesce(nullif(trim(p.display_name),''),'익명') as reporter,
+         count(*)::bigint as reports,
+         count(*) filter (where r.fills_gap)::bigint as gaps_filled
+  from public.reports r left join public.profiles p on p.id = r.user_id
+  where r.status <> 'rejected'
+  group by 1
+  order by gaps_filled desc, reports desc, reporter
+  limit greatest(1, least(coalesce(lim,20), 100))
+$$;
+revoke all on function public.report_leaderboard(int) from public;
+grant execute on function public.report_leaderboard(int) to anon, authenticated;
+
+-- ── P4 관리자(profiles.role='admin'): 전체 제보 조회 + status 변경(본인행 정책과 OR 결합) ──
+drop policy if exists reports_admin_select on public.reports;
+drop policy if exists reports_admin_update on public.reports;
+create policy reports_admin_select on public.reports for select
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+create policy reports_admin_update on public.reports for update
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
+  with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+
+-- ── MCP 스냅샷용: 승인된 제보를 (종×시군구) 익명 집계(build_community_snapshot.py → MCP community_discoveries) ──
+create or replace function public.approved_discoveries()
+returns table(ktsn text, sigungu text, cnt bigint, last_year int)
+language sql security definer set search_path = public stable as $$
+  select ktsn, sigungu, count(*)::bigint as cnt,
+         max(extract(year from observed_date))::int as last_year
+  from public.reports
+  where status = 'approved' and sigungu is not null and sigungu <> '00000'
+  group by ktsn, sigungu
+$$;
+revoke all on function public.approved_discoveries() from public;
+grant execute on function public.approved_discoveries() to anon, authenticated;

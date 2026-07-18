@@ -24,7 +24,8 @@ DATA_FILES = ["taxa_summary.js", "demo_mm.js",
               "species_index.js", "species_state.js", "species_interest.js", "sido.geojson", "sigungu.geojson",
               "env_meta.js", "species_env.js",
               "env_grid.js", "gap_meta.js",        # 발견공백 A: 전국 1km 격자 + 메타(지연 로드)
-              "taxon_ko.js"]                       # 퀴즈 범위: 과·속 라틴→한글 룩업
+              "taxon_ko.js",                       # 퀴즈 범위: 과·속 라틴→한글 룩업
+              "missions.js"]                       # 시민과학 B: 유망 공백 미션보드(정적)
 # 분류군별 관측·점유·미디어는 분할 산출 — obs_/cells_/media_<T>.js + media_meta.js 전부 복사(지연 로드)
 DATA_GLOBS = ["obs_*.js", "cells_*.js", "media_*.js"]
 # 환경변수 래스터 오버레이(서브디렉터리 보존)

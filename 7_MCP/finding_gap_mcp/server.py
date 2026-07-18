@@ -106,6 +106,12 @@ def trending_species(taxon_group: str = "", redlist_category: str = "", limit: i
 
 
 @mcp.tool()
+def community_discoveries(region: str = "", taxon_group: str = "", limit: int = 50) -> dict:
+    """관리자 승인된 시민 제보(시민 재발견·신규)의 익명 집계 — 종×시군구 제보수. 미승인·미검증 제보, 정확 좌표·URL·개인정보는 미노출. 승인 제보 없으면 빈 목록. region(시도2/시군구5)·taxon_group 로 한정."""
+    return tools.community_discoveries(region or None, taxon_group or None, limit)
+
+
+@mcp.tool()
 def find_region(name: str = "", level: str = "") -> dict:
     """행정구역 이름으로 코드 찾기(다른 도구의 region 입력용). level='sido'|'sigungu' 로 제한 가능."""
     return tools.find_region(name or None, level or None)

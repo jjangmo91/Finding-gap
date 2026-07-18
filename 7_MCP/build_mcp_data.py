@@ -182,6 +182,24 @@ def main():
     region.to_sql("region", con, index=False)
     taxa.to_sql("taxa", con, index=False)
 
+    # ── community: 관리자 승인된 시민 제보 익명 집계(시군구 단위) — Feature B P4→MCP ──
+    #   community_reports.json(build_community_snapshot.py) = [{ktsn,sigungu,count,last_year}]. 미수집이면 빈 테이블.
+    comm = _load_json(OUT / "community_reports.json") or []
+    spm = sp.set_index("ktsn")[["korean_name", "scientific_name", "taxon_group"]].to_dict("index")
+    regm = dict(zip(region["code"], region["name"]))
+    comm_rows = []
+    for r in comm:
+        k = str(r["ktsn"]); sg = str(r["sigungu"])
+        m = spm.get(k, {})
+        comm_rows.append({
+            "ktsn": k, "korean_name": m.get("korean_name", ""),
+            "scientific_name": m.get("scientific_name", ""), "taxon_group": m.get("taxon_group", ""),
+            "region": sg, "sido": sg[:2], "region_name": regm.get(sg, sg),
+            "count": int(r.get("count", 1)), "last_year": int(r.get("last_year", 0) or 0)})
+    comm_df = pd.DataFrame(comm_rows, columns=["ktsn", "korean_name", "scientific_name",
+                                               "taxon_group", "region", "sido", "region_name", "count", "last_year"])
+    comm_df.to_sql("community", con, index=False)
+
     meta = pd.DataFrame([
         ("generated", GEN_DATE),
         ("version", "0.1.0"),
@@ -198,6 +216,8 @@ def main():
         ("interest_wiki_update", "monthly"),
         ("interest_wiki_species", str(len(ko_article))),
         ("interest_user_active", "1" if user_active else "0"),
+        ("community_reports", str(len(comm_rows))),
+        ("community_source", "관리자 승인된 시민 제보(익명 집계, 시군구 단위, source='community'). 정확좌표·개인정보 미포함. 미승인·미검증 제보는 미노출."),
     ], columns=["key", "value"])
     meta.to_sql("meta", con, index=False)
 
@@ -213,6 +233,8 @@ def main():
     cur.execute("CREATE INDEX idx_media_ktsn ON media(ktsn)")
     cur.execute("CREATE INDEX idx_region_level ON region(level)")
     cur.execute("CREATE INDEX idx_species_interest ON species(taxon_group, interest)")
+    cur.execute("CREATE INDEX idx_comm_region ON community(region)")
+    cur.execute("CREATE INDEX idx_comm_taxon ON community(taxon_group)")
     con.commit()
     con.execute("VACUUM")
     con.commit()

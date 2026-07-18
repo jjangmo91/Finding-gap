@@ -469,6 +469,34 @@ def trending_species(taxon_group=None, redlist_category=None, limit=20):
             "species": rows}
 
 
+def community_discoveries(region=None, taxon_group=None, limit=50):
+    """관리자 승인된 시민 제보(시민 재발견·신규)의 익명 집계 — 종×시군구 제보수. 미승인·미검증 제보,
+    정확 좌표·URL·개인정보는 미노출(시군구 단위 집계만). 승인 제보 없으면 빈 목록.
+    region(시도 2자리/시군구 5자리)·taxon_group 로 한정."""
+    limit = max(1, min(int(limit), 200))
+    if not db.one("SELECT name FROM sqlite_master WHERE type='table' AND name='community'"):
+        return {"level": "community", "count": 0, "records": [],
+                "note": "커뮤니티 제보 테이블 없음(데이터 재빌드 전) — 빈 목록."}
+    where, params = "1=1", []
+    if region:
+        code = str(region).strip()
+        where += " AND sido=?" if len(code) == 2 else " AND region=?"
+        params.append(code)
+    if taxon_group:
+        tg = str(taxon_group).strip()
+        where += " AND taxon_group=?"
+        params.append(tg if tg == "-P" else tg.upper())
+    rows = db.rows(
+        "SELECT ktsn,korean_name,scientific_name,taxon_group,region,sido,region_name,count,last_year "
+        f"FROM community WHERE {where} ORDER BY count DESC, last_year DESC, korean_name LIMIT ?", params + [limit])
+    agg = db.one(f"SELECT COUNT(*) n, COALESCE(SUM(count),0) s FROM community WHERE {where}", params)
+    return {"level": "community", "region": region, "taxon_group": taxon_group,
+            "discoveries": agg["n"], "total_reports": agg["s"], "count": len(rows),
+            "note": ("관리자 승인된 시민 제보 익명 집계(시군구 단위·개인정보 미포함)." if rows
+                     else "승인된 시민 제보 없음 — 빈 목록. 제보·관리자 검토 축적 후 활성."),
+            "records": rows}
+
+
 def find_region(name=None, level=None):
     """행정구역 코드 찾기 — 이름으로 시도/시군구 코드 조회(다른 도구의 region 입력용)."""
     where = "1=1"

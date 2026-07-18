@@ -27,6 +27,11 @@
 `ktsn` · `src`(nibr/inat) · `type`(photo/illustration/specimen/video/sound) ·
 `license`(KOGL/CC-BY[-NC]) · `attribution` · `thumb` · `full`(공개 핫링크 URL). 종당 최대 12.
 
+### `community` — 승인된 시민 제보 익명 집계 (Feature B)
+`ktsn` · `korean_name` · `scientific_name` · `taxon_group` · `region`(시군구5) · `sido` · `region_name` · `count` · `last_year`
+- 관리자 **승인(status='approved')** 된 시민 제보를 (종 × 시군구) 로 집계. `build_community_snapshot.py`(approved_discoveries RPC) → `community_reports.json` → 이 테이블.
+- **미승인·미검증 제보, 정확 좌표·URL·user_id 는 미포함**(시군구 단위 집계·개인식별 불가). 승인 제보 0이면 빈 테이블(honest). `community_discoveries` 툴의 원천.
+
 ### `region` (269) · `taxa` (9) · `meta`
 - `region`: `code·name·level`(sido/sigungu)·`sido_cd`
 - `taxa`: `taxon_group·taxon_group_kor·n_species`
