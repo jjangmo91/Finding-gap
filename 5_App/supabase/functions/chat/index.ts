@@ -313,6 +313,8 @@ Deno.serve(async (req) => {
   const started = Date.now();
   try {
     const usedTools: string[] = [];
+    let spHint: Record<string, string> | null = null;    // 지도 딥링크(종별 mode B)
+    let regHint: Record<string, string> | null = null;   // 지도 딥링크(지역·분류군 mode A)
     for (let step = 0; step < MAX_STEPS; step++) {
       if (Date.now() - started > BUDGET_MS) break;
       const data = await callGemini(contents);
@@ -320,7 +322,7 @@ Deno.serve(async (req) => {
       const calls = parts.filter((p: Record<string, unknown>) => p.functionCall);
       if (!calls.length) {
         const text = parts.filter((p: Record<string, unknown>) => p.text).map((p: Record<string, string>) => p.text).join("").trim();
-        return json({ reply: text || "답변을 생성하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.", remaining, used_tools: usedTools });
+        return json({ reply: text || "답변을 생성하지 못했습니다. 질문을 바꿔 다시 시도해 주세요.", remaining, used_tools: usedTools, map: spHint ?? regHint });
       }
       contents.push({ role: "model", parts });
       const responses = [];
@@ -331,6 +333,22 @@ Deno.serve(async (req) => {
         let result: unknown;
         try { result = TOOLS[name] ? await TOOLS[name](args) : { error: `알 수 없는 도구: ${name}` }; }
         catch (_e) { result = { error: "조회 중 오류가 발생했습니다." }; }
+        // 지도 딥링크 힌트: 종 상세(mode B) 우선, 없으면 지역·분류군 choropleth(mode A)
+        const r = result as Record<string, unknown>;
+        if (r && !r.error) {
+          if (name === "species_detail" && r.ktsn) {
+            spHint = { mode: "B", sp: String(r.ktsn) };
+          } else if (name === "region_discovery_summary" || name === "undiscovered_priority_species" || name === "list_protected_species") {
+            const rc = String(args.region ?? "").trim();
+            const tg = resolveTaxon(args.taxon_group);
+            const h: Record<string, string> = { mode: "A", metric: "gap" };
+            if (rc.length === 5) { h.sigungu = rc; h.sido = rc.slice(0, 2); }
+            else if (rc.length === 2) h.sido = rc;
+            if (tg && TAXA_CODES.has(tg)) h.taxon = tg;
+            if (name === "list_protected_species" && String(args.state ?? "").toLowerCase() === "found") h.metric = "found";
+            if (h.sido || h.taxon) regHint = h;
+          }
+        }
         responses.push({ functionResponse: { name, response: { result } } });
       }
       contents.push({ role: "user", parts: responses });
