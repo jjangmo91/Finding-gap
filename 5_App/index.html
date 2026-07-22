@@ -243,6 +243,8 @@
   .btn.sm{padding:5px 12px;font-size:12px}
   .btn.sm.rej{background:#f3eeee;color:#a03027}
   .admbtns{margin-left:auto;display:inline-flex;gap:6px;flex:none}
+  .feedlist .fphoto{flex-basis:100%;margin-top:4px}
+  .feedlist .fphoto img{max-width:220px;max-height:160px;border-radius:8px;display:block;border:1px solid var(--line)}
 </style>
 <script src="config.js" onerror="window.SUPABASE_URL=window.SUPABASE_URL||''"></script>
 <script src="fg_analytics.js"></script>
@@ -517,7 +519,7 @@ else Promise.all([
 
 <!-- 마이데이터(로그인·관심 종) — Supabase 설정(config.js)이 있을 때만 활성, 없으면 정적 안내 유지 -->
 <script type="module">
-import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts, communityReports, myReports, deleteReport, leaderboard, myRole, adminPendingReports, setReportStatus } from './fg_supabase.js';
+import { configured, onAuth, sendMagicLink, signInWithGoogle, signOut, watchList, watchRemove, watchCounts, communityReports, myReports, deleteReport, leaderboard, myRole, adminPendingReports, setReportStatus, reportPhotoUrl, removeReportPhoto } from './fg_supabase.js';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const view=document.getElementById('view-my');
 const spName=k=>{ const sp=(window.__SPIDX__||[]).find(x=>x.k===k); return sp?{n:sp.n||sp.s,s:sp.s||'',t:sp.t||''}:{n:k,s:'',t:''}; };
@@ -557,8 +559,10 @@ function reportLine(r,mine){
   const link=/^https?:\/\//i.test(r.url||'')?`<a class="muted2" href="${esc(r.url)}" target="_blank" rel="noopener nofollow ugc" style="margin-left:8px">근거 →</a>`:'';
   const del=mine?`<button class="rm" title="삭제">✕ 삭제</button>`:'';
   const note=r.note?`<div class="fnote">${esc(r.note)}</div>`:'';
+  const photoUrl=r.photo_path?reportPhotoUrl(r.photo_path):null;
+  const photo=photoUrl?`<div class="fphoto"><img src="${esc(photoUrl)}" alt="" loading="lazy"></div>`:'';
   return `<span class="nm">${esc(nm)}</span> ${sci} ${statusBadge(r.status)}${gap}`+
-    `<span class="fmeta">${esc(r.observed_date||'')}${who}</span>${link}${del}${note}`;
+    `<span class="fmeta">${esc(r.observed_date||'')}${who}</span>${link}${del}${photo}${note}`;
 }
 async function renderFeed(){
   const host=document.getElementById('feedList'); if(!host) return;
@@ -674,7 +678,9 @@ async function myPage(user){
       mr.innerHTML='';
       rows.forEach(r=>{ const li=document.createElement('li'); li.innerHTML=reportLine(r,true);
         const d=li.querySelector('.rm'); if(d) d.onclick=async()=>{ d.disabled=true;
-          try{ const {error}=await deleteReport(r.id); if(error) throw error; li.remove();
+          try{ const {error}=await deleteReport(r.id); if(error) throw error;
+            if(r.photo_path) removeReportPhoto(r.photo_path).catch(()=>{});   // best-effort, 실패해도 제보 삭제는 유지
+            li.remove();
             if(!mr.children.length) mr.innerHTML='<li class="muted2">아직 제보한 관찰이 없습니다.</li>'; }
           catch(e){ d.disabled=false; alert('삭제 실패: '+(e.message||e)); } };
         mr.appendChild(li); });
