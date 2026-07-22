@@ -72,12 +72,6 @@
   /* panel */
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:16px}
   .panel h3{margin:0;font-size:14.5px;display:flex;align-items:center;gap:7px}
-  .q{width:17px;height:17px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);
-    font-size:11px;line-height:1;cursor:pointer;padding:0;font-weight:700}
-  .q:hover{border-color:var(--accent);color:var(--accent)}
-  .help{margin:10px 0 2px;padding:10px 12px;background:#f6f7f5;border:1px solid #eceee9;border-radius:8px;
-    font-size:12px;color:#54585a;line-height:1.55}
-  .help[hidden]{display:none}
   /* 물음표 툴팁: 옅은 안내문을 아이콘 뒤로 — 호버·포커스·탭(모바일) 시 표출 */
   .qtip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
     border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:10px;line-height:1;
@@ -163,6 +157,9 @@
     <h1><b>Finding gap</b> · 국가 생물종 발견공백</h1>
     <p class="sub">국가생물종목록(KTSN)을 기준으로, 국내 조사자료에서 <b>아직 발견되지 않은 종</b>을 분류군·지역·시기로 조회합니다.</p>
   </header>
+
+  <a href="chat.html" id="chatEntry" hidden style="display:inline-flex;align-items:center;gap:7px;margin:4px 0;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);text-decoration:none;font-size:13px;font-weight:600;color:var(--accent)">발견공백 도우미에게 물어보기 <span style="color:var(--faint);font-weight:400">대화형 →</span></a>
+  <script>if(window.CHAT_ENABLED){var _ce=document.getElementById('chatEntry');if(_ce)_ce.hidden=false;}</script>
 
   <nav class="axes" id="axes" aria-label="홈 메뉴">
     <button class="ax on" data-ax="survey">조사정보</button>
@@ -387,21 +384,18 @@ function renderDash(group){
     <div class="card gap"><div class="v">${nf(none)}</div><div class="l">미발견 (조사자료 관측 0)</div><div class="s">발견공백</div></div>
     <div class="card"><div class="v">${nf(nrec)}</div><div class="l">누적 관측</div><div class="s">고유 좌표 기준</div></div>
     ${(((window.__SPMEDIA_META__||{}).taxa||{})[group]>=4)?`<a class="card quiz" href="quiz.html?mode=taxon&taxon=${group}">
-      <div class="qt">분류군 퀴즈 <button class="q" data-h="hquiz">?</button></div>
+      <div class="qt">분류군 퀴즈 <button type="button" class="qtip" aria-label="퀴즈 설명" data-tip="이 분류군의 종을 유사종 사진과 비교해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 과·속 단위로 범위를 좁힐 수 있어요.">?</button></div>
       <div class="ql">유사종 사진으로 종 익히기</div>
       <div class="qs">과·속 범위 선택 →</div></a>`:''}
   </div>
-  ${(((window.__SPMEDIA_META__||{}).taxa||{})[group]>=4)?`<div class="help" id="hquiz" hidden style="margin:-6px 0 16px">이 분류군의 종을 <b>유사종 사진과 비교</b>해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 <b>과·속 단위</b>로 범위를 좁힐 수 있어요.</div>`:''}
 
   <div class="panel">
-    <h3>전국 발견 현황 <button class="q" data-h="h1">?</button></h3>
-    <div class="help" id="h1" hidden>국가생물종목록 대상 종 중, 국내 조사자료에서 한 번이라도 관측된 종(<b>발견</b>)과 관측 기록이 전혀 없는 종(<b>미발견 = 발견공백</b>)의 전국 종 수입니다. 막대를 누르면 지도 서비스에서 지역·시기·국가적색목록으로 조회할 수 있습니다.</div>
+    <h3>전국 발견 현황 <button type="button" class="qtip" aria-label="설명 보기" data-tip="국가생물종목록 대상 종 중, 국내 조사자료에서 한 번이라도 관측된 종(발견)과 관측 기록이 전혀 없는 종(미발견 = 발견공백)의 전국 종 수입니다. 막대를 누르면 지도 서비스에서 지역·시기·국가적색목록으로 조회할 수 있습니다.">?</button></h3>
     <div class="bars">${barHTML}</div>
   </div>
 
   <div class="panel">
-    <h3>국가적색목록 현황 <button class="q" data-h="h2">?</button></h3>
-    <div class="help" id="h2" hidden>적색목록 평가 범주별로, 그 범주의 종들이 조사자료에서 어떤 상태인지 보여줍니다. <b>발견</b>=최근 10년 내 기록 · <b>휴면</b>=기록은 있으나 최신 기록이 ${fresh}년 이전(10년 이상 미보고) · <b>미발견</b>=관측 0. NE(미평가)·NA(미적용)는 색·의미 구분이 어려워 하나로 합쳐 표시합니다. 적색목록에 범주가 지정되지 않은 ${blankN}종(미수록)은 이 차트에 포함되지 않습니다.</div>
+    <h3>국가적색목록 현황 <button type="button" class="qtip" aria-label="설명 보기" data-tip="적색목록 평가 범주별로, 그 범주의 종들이 조사자료에서 어떤 상태인지 보여줍니다. 발견=최근 10년 내 기록 · 휴면=기록은 있으나 최신 기록이 ${fresh}년 이전(10년 이상 미보고) · 미발견=관측 0. NE(미평가)·NA(미적용)는 색·의미 구분이 어려워 하나로 합쳐 표시합니다. 적색목록에 범주가 지정되지 않은 ${blankN}종(미수록)은 이 차트에 포함되지 않습니다.">?</button></h3>
     <div class="enc">
       <span><i class="g" style="background:#8a8a82;border-radius:2px"></i>발견</span>
       <span><i class="g hatch" style="--c:#8a8a82"></i>10년+ 미발견·휴면</span>
@@ -410,7 +404,6 @@ function renderDash(group){
     <div class="donuts">${donutHTML}</div>
   </div>`;
   document.getElementById('dash').innerHTML=html;
-  bindHelp();
 }
 
 /* ── 렌더: 비-MM 분류군 요약 + 지도 서비스 안내 ── */
@@ -431,23 +424,14 @@ function renderSoon(t){
     ${box(gap,'미발견 (발견공백)')}
     ${box(t.n_records||0,'누적 관측(고유 좌표)')}
     ${(((window.__SPMEDIA_META__||{}).taxa||{})[t.group]>=4)?`<a class="card quiz" style="flex:1;min-width:132px" href="quiz.html?mode=taxon&taxon=${t.group}">
-      <div class="qt">분류군 퀴즈 <button class="q" data-h="hquiz2">?</button></div>
+      <div class="qt">분류군 퀴즈 <button type="button" class="qtip" aria-label="퀴즈 설명" data-tip="이 분류군의 종을 유사종 사진과 비교해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 과·속 단위로 범위를 좁힐 수 있어요.">?</button></div>
       <div class="ql">유사종 사진으로 종 익히기</div>
       <div class="qs">과·속 범위 선택 →</div></a>`:''}
   </div>
-  ${(((window.__SPMEDIA_META__||{}).taxa||{})[t.group]>=4)?`<div class="help" id="hquiz2" hidden style="margin-top:10px">이 분류군의 종을 <b>유사종 사진과 비교</b>해 맞히는 학습 퀴즈입니다. 퀴즈 안에서 <b>과·속 단위</b>로 범위를 좁힐 수 있어요.</div>`:''}
   <div class="soonbox" style="margin-top:14px">
     <div class="msg">${t.kor} 발견공백을 <b>지도·지역·시기·국가적색목록</b>으로 조회하려면 지도 서비스로 이동하세요. 포유류 상세 대시보드는 위에서 포유류 타일을 선택하면 표시됩니다.</div>
     <a href="service.html?taxon=${t.group}" style="display:inline-block;margin-top:10px;padding:9px 16px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:13px">${t.kor} 지도 서비스 열기 →</a>
   </div>`;
-  bindHelp();
-}
-
-/* ── 도움말 토글 ── */
-function bindHelp(){
-  document.querySelectorAll('#dash .q').forEach(b=>b.onclick=(e)=>{
-    e.preventDefault(); e.stopPropagation();
-    const el=document.getElementById(b.dataset.h); if(el)el.hidden=!el.hidden;});
 }
 
 /* ── 물음표 툴팁: 모바일 탭 토글 + 외부 클릭 시 닫기(데스크톱은 호버·포커스로 표출) ── */
