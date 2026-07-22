@@ -50,9 +50,9 @@ export async function watchCounts() {
                      .sort((a, b) => b.count - a.count);
 }
 
-// ── 시민과학 URL 제보(reports) — Feature B ──
+// ── 시민과학 제보(reports) — Feature B. 근거는 사진(권장) 또는 URL, 최소 하나 ──
 // user_id 는 DB default auth.uid() 로 자동 채움. 정밀 좌표는 원시 행(본인 RLS)에만 저장.
-// r = { ktsn, scientific_name, korean_name, taxon_group, url, lat, lon, observed_date, note }
+// r = { ktsn, scientific_name, korean_name, taxon_group, url?, photo_path?, lat, lon, observed_date, note }
 export async function submitReport(r) {
   if (!sb) throw new Error('not configured');
   return sb.from('reports').insert({
@@ -60,7 +60,8 @@ export async function submitReport(r) {
     scientific_name: r.scientific_name || null,
     korean_name: r.korean_name || null,
     taxon_group: r.taxon_group || null,
-    url: r.url,
+    url: r.url || null,
+    photo_path: r.photo_path || null,
     lat: r.lat,
     lon: r.lon,
     observed_date: r.observed_date,
@@ -71,10 +72,29 @@ export async function submitReport(r) {
 export async function myReports() {
   if (!sb) return [];
   const { data, error } = await sb.from('reports')
-    .select('id,ktsn,korean_name,scientific_name,taxon_group,url,lat,lon,observed_date,note,status,fills_gap,sigungu,created_at')
+    .select('id,ktsn,korean_name,scientific_name,taxon_group,url,photo_path,lat,lon,observed_date,note,status,fills_gap,sigungu,created_at')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+// ── 제보 사진(Storage report-photos, 본인 폴더에만 업로드/삭제 · 읽기는 public) ──
+// 마이그레이션: 5_App/supabase/reports_photo.sql. 미배포면 업로드 시 에러 반환(모달에서 URL로 폴백 안내).
+export async function uploadReportPhoto(blob) {
+  if (!sb) return { path: null, error: new Error('not configured') };
+  const { data: { user } = {} } = await sb.auth.getUser();
+  if (!user) return { path: null, error: new Error('로그인이 필요합니다') };
+  const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+  const { error } = await sb.storage.from('report-photos').upload(path, blob, { contentType: 'image/jpeg' });
+  return { path: error ? null : path, error };
+}
+export function reportPhotoUrl(path) {
+  if (!sb || !path) return null;
+  return sb.storage.from('report-photos').getPublicUrl(path).data.publicUrl;
+}
+export async function removeReportPhoto(path) {
+  if (!sb || !path) return;
+  return sb.storage.from('report-photos').remove([path]);
 }
 export async function deleteReport(id) { return sb.from('reports').delete().eq('id', id); }
 // 공개 커뮤니티 피드 — community_reports() RPC(좌표 미노출·거부 제외). 미배포/미설정이면 빈 배열.

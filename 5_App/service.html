@@ -381,6 +381,10 @@
   .rpt-gate{text-align:center;padding:14px 4px}
   .rpt-gate p{color:var(--muted);font-size:13px;margin:0 0 14px;line-height:1.6}
   .rpt-gate .go{display:inline-block;border:0;border-radius:9px;padding:11px 20px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none}
+  .rpt-photo-prev{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .rpt-photo-prev img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #d7ded9}
+  .rpt-photo-prev button{border:1px solid #d7ded9;background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer}
+  .rpt-url-toggle{display:inline-block;margin-top:6px;font-size:12px;color:var(--faint);cursor:pointer;text-decoration:underline}
   .report-lk{cursor:pointer}
   @media(max-width:880px){ .rpt-overlay{padding:0;align-items:flex-end} .rpt-modal{max-width:none;max-height:94vh;border-radius:14px 14px 0 0} }
 </style>
@@ -1196,11 +1200,13 @@ if(configured) onAuth(u=>{ user=u; W.clear();
 
 <!-- 발견 제보(Feature B) — 종·지도 핀·URL·발견일 → reports 테이블(본인 RLS). 미설정/미로그인 graceful. -->
 <script type="module">
-import { configured, onAuth, submitReport } from './fg_supabase.js';
+import { configured, onAuth, submitReport, uploadReportPhoto } from './fg_supabase.js';
+import exifr from 'https://esm.sh/exifr@7';
 const SPIDX = window.__SPIDX__ || [];
 const overlay = document.getElementById('rptOverlay');
 const body = document.getElementById('rptBody');
 let user = null, selSp = null, latlon = null, rptMap = null, pinSrc = null;
+let photoFile = null, photoBlob = null;                 // 업로드용 압축 사진(blob) + 원본(EXIF 읽기용)
 
 function todayStr(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -1218,6 +1224,7 @@ function decorateCard(sp){
 function open(prefill){
   selSp = prefill ? {k:prefill.k,n:prefill.n,s:prefill.s,t:prefill.t,g:prefill.g} : null;
   latlon = null;
+  photoFile = null; photoBlob = null;
   overlay.hidden = false;
   document.body.style.overflow='hidden';
   render();
@@ -1239,10 +1246,15 @@ function render(){
   body.innerHTML =
     '<div class="rpt-f" id="rptSpWrap"></div>'+
     (eg?'<div class="rpt-hint" style="margin:-6px 0 12px;color:#a06a1a">멸종위기 야생생물 — 정확한 위치는 공개 피드에 노출되지 않습니다.</div>':'')+
-    '<div class="rpt-f"><label>발견 위치 <span class="req">*</span> — 지도를 클릭해 지점을 찍으세요</label>'+
+    '<div class="rpt-f"><label>발견 위치 <span class="req">*</span> — 사진에 위치정보(GPS)가 있으면 자동 입력, 지도를 클릭해 수정</label>'+
       '<div class="rpt-map" id="rptMap"></div><div class="rpt-coord" id="rptCoord"></div></div>'+
     '<div class="rpt-f"><label>발견일 <span class="req">*</span></label><input type="date" id="rptDate" max="'+todayStr()+'" value="'+todayStr()+'"></div>'+
-    '<div class="rpt-f"><label>관찰 근거 URL <span class="req">*</span> — 사진·관찰기록 링크</label><input type="url" id="rptUrl" placeholder="https://..." inputmode="url"></div>'+
+    '<div class="rpt-f"><label>관찰 사진 <span class="req">*</span></label>'+
+      '<input type="file" id="rptPhoto" accept="image/*" capture="environment">'+
+      '<div class="rpt-photo-prev" id="rptPhotoPrev" hidden><img id="rptPhotoImg" alt=""><button type="button" id="rptPhotoClear">✕ 제거</button></div>'+
+      '<div class="rpt-hint" id="rptPhotoHint" style="margin-top:6px"></div>'+
+      '<span class="rpt-url-toggle" id="rptUrlToggle">사진이 없다면 URL로 제보 →</span>'+
+      '<div id="rptUrlWrap" hidden style="margin-top:8px"><input type="url" id="rptUrl" placeholder="https://... (관찰기록 링크)" inputmode="url"></div></div>'+
     '<div class="rpt-f"><label>메모 (선택)</label><textarea id="rptNote" placeholder="개체수·서식환경 등"></textarea></div>'+
     '<button class="rpt-submit" id="rptSubmit" type="button">제보 등록</button>'+
     '<div class="rpt-msg" id="rptMsg"></div>';
@@ -1250,7 +1262,64 @@ function render(){
   initMap();
   const su=document.getElementById('rptSubmit');
   su.onclick=doSubmit;
+  document.getElementById('rptPhoto').addEventListener('change', onPhotoChange);
+  document.getElementById('rptPhotoClear').onclick = clearPhoto;
+  document.getElementById('rptUrlToggle').onclick = toggleUrlField;
   ['rptUrl','rptDate'].forEach(id=>document.getElementById(id).addEventListener('input',updateSubmit));
+  updateSubmit();
+}
+
+// ── 사진: EXIF GPS 자동 위치 + 클라이언트 압축(원본 EXIF는 재인코딩 시 제거됨) ──
+async function readGps(file){
+  try{
+    const gps = await exifr.gps(file);
+    if(gps && isFinite(gps.latitude) && isFinite(gps.longitude)) return {lat:gps.latitude, lon:gps.longitude};
+  }catch(_){}
+  return null;
+}
+async function compressPhoto(file, maxDim=1600, quality=0.82){
+  const img = await createImageBitmap(file);
+  let w=img.width, h=img.height;
+  if(Math.max(w,h) > maxDim){ const sc=maxDim/Math.max(w,h); w=Math.round(w*sc); h=Math.round(h*sc); }
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  cv.getContext('2d').drawImage(img,0,0,w,h);
+  return await new Promise(res=>cv.toBlob(res,'image/jpeg',quality));
+}
+async function onPhotoChange(e){
+  const f=e.target.files[0];
+  const hint=document.getElementById('rptPhotoHint'), prev=document.getElementById('rptPhotoPrev'), img=document.getElementById('rptPhotoImg');
+  photoFile=f||null; photoBlob=null;
+  if(!f){ prev.hidden=true; hint.textContent=''; updateSubmit(); return; }
+  hint.textContent='사진 처리 중…';
+  const gps=await readGps(f);
+  if(gps){
+    setPin(gps.lon, gps.lat);
+    if(rptMap){ rptMap.getView().setCenter(ol.proj.fromLonLat([gps.lon,gps.lat])); rptMap.getView().setZoom(13); }
+    hint.textContent='사진에서 위치를 자동으로 읽었습니다. 지도에서 확인·수정할 수 있어요.';
+  } else {
+    hint.textContent='사진에 위치정보가 없습니다. 지도를 클릭해 발견 위치를 지정하세요.';
+  }
+  try{
+    photoBlob = await compressPhoto(f);
+    img.src = URL.createObjectURL(photoBlob);
+    prev.hidden = false;
+  }catch(err){
+    hint.textContent = '사진을 처리하지 못했습니다. 다른 사진으로 다시 시도하세요.';
+  }
+  updateSubmit();
+}
+function clearPhoto(){
+  photoFile=null; photoBlob=null;
+  document.getElementById('rptPhoto').value='';
+  document.getElementById('rptPhotoPrev').hidden=true;
+  document.getElementById('rptPhotoHint').textContent='';
+  updateSubmit();
+}
+function toggleUrlField(){
+  const w=document.getElementById('rptUrlWrap'), t=document.getElementById('rptUrlToggle');
+  w.hidden=!w.hidden;
+  t.textContent = w.hidden ? '사진이 없다면 URL로 제보 →' : 'URL 입력란 숨기기';
+  if(!w.hidden) document.getElementById('rptUrl').focus();
   updateSubmit();
 }
 
@@ -1315,23 +1384,34 @@ function setPin(lon,lat){
 }
 
 function validUrl(u){ return /^https?:\/\/.+/i.test(u); }
+function hasEvidence(){
+  const url=(document.getElementById('rptUrl')||{}).value||'';
+  return !!photoBlob || validUrl(url.trim());
+}
 function updateSubmit(){
   const su=document.getElementById('rptSubmit'); if(!su) return;
-  const url=(document.getElementById('rptUrl')||{}).value||'';
   const date=(document.getElementById('rptDate')||{}).value||'';
-  su.disabled = !(selSp && latlon && validUrl(url.trim()) && date);
+  su.disabled = !(selSp && latlon && hasEvidence() && date);
 }
 async function doSubmit(){
   const su=document.getElementById('rptSubmit'), msg=document.getElementById('rptMsg');
-  const url=document.getElementById('rptUrl').value.trim();
+  const url=(document.getElementById('rptUrl')||{}).value.trim();
   const date=document.getElementById('rptDate').value;
   const note=document.getElementById('rptNote').value;
   msg.className='rpt-msg';
-  if(!(selSp&&latlon&&validUrl(url)&&date)){ msg.className='rpt-msg err'; msg.textContent='종·위치·URL·발견일을 모두 입력하세요.'; return; }
+  if(!(selSp&&latlon&&hasEvidence()&&date)){ msg.className='rpt-msg err'; msg.textContent='종·위치·사진(또는 URL)·발견일을 모두 입력하세요.'; return; }
   su.disabled=true; su.textContent='등록 중…';
   try{
+    let photo_path=null;
+    if(photoBlob){
+      su.textContent='사진 업로드 중…';
+      const { path, error:upErr } = await uploadReportPhoto(photoBlob);
+      if(upErr) throw upErr;
+      photo_path=path;
+    }
+    su.textContent='등록 중…';
     const { error } = await submitReport({ ktsn:selSp.k, scientific_name:selSp.s, korean_name:selSp.n, taxon_group:selSp.t,
-      url, lat:latlon.lat, lon:latlon.lon, observed_date:date, note });
+      url: url || null, photo_path, lat:latlon.lat, lon:latlon.lon, observed_date:date, note });
     if(error) throw error;
     msg.className='rpt-msg ok';
     msg.textContent='제보가 등록되었습니다. 검토 후 반영됩니다. 마이데이터에서 내 제보 이력을 볼 수 있어요.';
