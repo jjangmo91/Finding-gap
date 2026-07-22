@@ -8,7 +8,7 @@ import postgres from "https://deno.land/x/postgresjs@v3.4.5/mod.js";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest";
+const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-lite-latest";
 const DAILY_CAP = Number(Deno.env.get("CHAT_DAILY_CAP") ?? "20");
 const MAX_STEPS = 4;               // 에이전트 루프 상한(툴 호출 왕복)
 const MAX_HISTORY = 12;            // 클라이언트가 보내는 대화 이력 상한
@@ -36,6 +36,18 @@ const asList = (v: unknown): string[] =>
 const normGrade = (v: unknown) =>
   asList(v).map((x) => x.toUpperCase().replace("급", "")).map((x) => ({ "1": "I", "2": "II" }[x] ?? x));
 const normRedlist = (v: unknown) => asList(v).map((x) => x.toUpperCase());
+const TAXA_CODES = new Set(["IN", "IV", "VP", "-P", "MS", "AV", "MM", "RP", "AM"]);
+const TAXA_KOR: Record<string, string> = {
+  "곤충": "IN", "곤충류": "IN", "무척추": "IV", "무척추동물": "IV", "관속식물": "VP", "식물": "VP",
+  "어류": "-P", "물고기": "-P", "선태": "MS", "선태류": "MS", "이끼": "MS", "조류": "AV", "새": "AV",
+  "포유류": "MM", "포유": "MM", "파충류": "RP", "파충": "RP", "양서류": "AM", "양서": "AM",
+};
+const resolveTaxon = (v: unknown): string | null => {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  if (TAXA_CODES.has(s.toUpperCase())) return s.toUpperCase();
+  return TAXA_KOR[s] ?? TAXA_KOR[s.replace(/류$/, "")] ?? s;
+};
 
 // ─────────────────────────── 도구(fg_* 조회) ───────────────────────────
 
@@ -53,7 +65,7 @@ async function regionDiscoverySummary(a: Record<string, unknown>) {
   const code = String(a.region ?? "").trim();
   if (code.length !== 2 && code.length !== 5) return { error: "region 은 시도(2자리) 또는 시군구(5자리) 코드여야 합니다. find_region 으로 코드를 찾으세요." };
   const col = regionField(code);
-  const tg = a.taxon_group ? String(a.taxon_group) : null;
+  const tg = resolveTaxon(a.taxon_group);
   const region = (await sql`select code, name, level from fg_region where code = ${code} limit 1`)[0];
   const rec = (await sql`
     select count(*)::int recorded, count(*) filter (where my >= ${CUTOFF})::int found from (
@@ -73,7 +85,7 @@ async function undiscoveredPrioritySpecies(a: Record<string, unknown>) {
   const code = String(a.region ?? "").trim();
   if (code.length !== 2 && code.length !== 5) return { error: "region 은 시도(2자리) 또는 시군구(5자리) 코드여야 합니다. find_region 으로 코드를 찾으세요." };
   const col = regionField(code);
-  const tg = a.taxon_group ? String(a.taxon_group) : null;
+  const tg = resolveTaxon(a.taxon_group);
   const grade = normGrade(a.endangered_grade);
   const rl = normRedlist(a.redlist_category);
   const limit = Math.max(1, Math.min(Number(a.limit ?? 15), 50));
@@ -133,7 +145,7 @@ async function listProtectedSpecies(a: Record<string, unknown>) {
   const grade = normGrade(a.endangered_grade);
   const rl = normRedlist(a.redlist_category);
   const isDefault = grade.length === 0 && rl.length === 0;
-  const tg = a.taxon_group ? String(a.taxon_group) : null;
+  const tg = resolveTaxon(a.taxon_group);
   const limit = Math.max(1, Math.min(Number(a.limit ?? 30), 100));
   const filt = sql`
     ${tg ? sql`and s.taxon_group = ${tg}` : sql``}
@@ -217,10 +229,19 @@ const DECLARATIONS = [
 
 const SYSTEM = `당신은 '발견공백 도우미'입니다. 한국의 생물종 '발견공백'(국가생물종목록에는 있으나 국내 조사자료에 관측 기록이 없거나 오래된 종)을 안내합니다.
 - 반드시 제공된 도구로 조회한 사실만 답하고, 수치를 지어내지 마세요. 도구가 빈 결과를 주면 그대로 "기록 없음"으로 전하세요.
-- 지역이 언급되면 먼저 find_region 으로 코드를 확인한 뒤 다른 도구에 그 코드를 넘기세요.
+- 도구는 꼭 필요한 것만 최소 횟수로 호출하세요. 같은 정보를 여러 도구로 중복 조회하지 말고, 답할 정보가 모이면 즉시 최종 답변을 작성하세요.
 - 발견 정의: 발견=최근 10년 내 기록, 휴면=기록은 있으나 10년 이상 미보고, 미발견=관측 기록 0(=발견공백). 기준연도 ${CUTOFF + 10}.
 - 답변은 한국어로 간결하게. 종은 국명(학명) 형식으로, 필요한 만큼만 나열하세요.
-- 생물다양성·발견공백과 무관한 요청은 정중히 범위를 벗어난다고 안내하세요.`;
+- 생물다양성·발견공백과 무관한 요청은 정중히 범위를 벗어난다고 안내하세요.
+
+[도구 선택]
+- 지역이 언급되면 먼저 find_region 으로 코드를 확인하고, 그 코드를 다른 도구의 region 인자로 넘기세요.
+- 지역의 발견/휴면/미발견 '규모·현황' → region_discovery_summary.
+- 지역에서 아직 못 찾은 종 '목록' → undiscovered_priority_species.
+- 멸종위기·적색목록 종 목록 → list_protected_species (region+state 로 지역별 상태 필터).
+- 특정 종의 전국 발견 상태 → search_species 로 ktsn 을 찾고 species_detail.
+- 전국 분류군별 요약 → taxa_summary (특정 지역 질문에는 쓰지 마세요).
+- taxon_group 인자에는 코드를 넘기세요: IN=곤충류, IV=무척추동물(곤충제외), VP=관속식물, -P=어류, MS=선태류, AV=조류, MM=포유류, RP=파충류, AM=양서류.`;
 
 async function callGemini(contents: unknown[]) {
   const ctrl = new AbortController();
@@ -239,7 +260,11 @@ async function callGemini(contents: unknown[]) {
         }),
       },
     );
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const err = new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
     return await res.json();
   } finally {
     clearTimeout(timer);
@@ -310,9 +335,17 @@ Deno.serve(async (req) => {
       }
       contents.push({ role: "user", parts: responses });
     }
-    return json({ reply: "질문이 복잡해 한 번에 처리하지 못했습니다. 조금 더 구체적으로 나눠 물어봐 주세요.", remaining, used_tools: usedTools });
+    try { await sql`update chat_usage set count = greatest(count - 1, 0) where user_id = ${user.id} and day = current_date`; } catch (_e) { /* noop */ }
+    return json({ reply: "질문이 복잡해 한 번에 처리하지 못했습니다. 조금 더 구체적으로 나눠 물어봐 주세요.", remaining: remaining + 1, used_tools: usedTools });
   } catch (e) {
     console.error("chat error:", e);
-    return json({ error: "답변 생성 중 오류가 발생했습니다." }, 502);
+    try { await sql`update chat_usage set count = greatest(count - 1, 0) where user_id = ${user.id} and day = current_date`; } catch (_e) { /* noop */ }
+    const rateLimited = (e as { status?: number })?.status === 429 || String(e).includes("Gemini 429");
+    return json({
+      error: rateLimited
+        ? "지금 이용이 몰려 잠시 후 다시 시도해 주세요. (무료 사용량 분당 제한)"
+        : "답변 생성 중 오류가 발생했습니다.",
+      remaining: remaining + 1,
+    }, rateLimited ? 429 : 502);
   }
 });
