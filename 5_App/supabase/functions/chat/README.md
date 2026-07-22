@@ -14,7 +14,8 @@
 
 3. **Gemini 키** — 함수 비밀키 설정:
    - `supabase secrets set GEMINI_API_KEY=...` (필수)
-   - 선택: `GEMINI_MODEL`(기본 `gemini-2.0-flash`), `CHAT_DAILY_CAP`(기본 20)
+   - 선택: `GEMINI_MODEL`(기본 `gemini-flash-latest`), `CHAT_DAILY_CAP`(기본 20)
+   - ⚠ 신규 API 키는 `gemini-2.0-flash`/`-flash-lite` 호출 시 429(할당량 없음)가 난다. 기본값을 무료 할당량이 있는 `gemini-flash-latest`로 둔다.
    - `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_DB_URL`은 Supabase가 자동 주입.
 
 4. **배포** — `supabase functions deploy chat`.

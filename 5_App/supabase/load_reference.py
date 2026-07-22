@@ -6,6 +6,7 @@
 """
 
 import os
+import re
 import sys
 import gzip
 import csv
@@ -20,8 +21,16 @@ except ImportError:
     sys.exit(1)
 
 
+def env_val(name):
+    env = Path(__file__).resolve().parent.parent / ".env"
+    if not env.exists():
+        return ""
+    m = re.search(rf"^\s*{name}\s*=\s*(.+?)\s*$", env.read_text(encoding="utf-8"), re.M)
+    return m.group(1).strip().strip('"').strip("'") if m else ""
+
+
 def get_db_url():
-    url = os.environ.get('SUPABASE_DB_URL', '').strip()
+    url = (os.environ.get('SUPABASE_DB_URL') or env_val('SUPABASE_DB_URL')).strip()
     if not url:
         print("""SUPABASE_DB_URL이 설정되지 않았습니다.
 Supabase Dashboard → Project Settings → Database → Connection string에서

@@ -8,7 +8,7 @@ import postgres from "https://deno.land/x/postgresjs@v3.4.5/mod.js";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest";
 const DAILY_CAP = Number(Deno.env.get("CHAT_DAILY_CAP") ?? "20");
 const MAX_STEPS = 4;               // 에이전트 루프 상한(툴 호출 왕복)
 const MAX_HISTORY = 12;            // 클라이언트가 보내는 대화 이력 상한
