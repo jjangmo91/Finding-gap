@@ -24,8 +24,9 @@
     font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;line-height:1.5}
   .wrap{max-width:820px;margin:0 auto;padding:24px 16px 40px}
   a{color:inherit}
-  .back{display:inline-block;font-size:13px;color:var(--muted);text-decoration:none;margin-bottom:14px}
-  .back:hover{color:var(--accent)}
+  .back{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);text-decoration:none;
+    margin-bottom:14px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--card)}
+  .back:hover{color:var(--accent);border-color:var(--accent)}
   header h1{margin:0 0 4px;font-size:23px;letter-spacing:-.01em}
   header h1 b{color:var(--accent)}
   header .sub{color:var(--muted);font-size:13.5px;margin:0;max-width:60ch}
@@ -105,7 +106,7 @@
 <body>
 <div class="wrap">
   <header>
-    <a class="back" href="index.html">← 홈</a>
+    <a class="back" href="index.html" aria-label="홈" title="홈"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block"><path d="M3.5 11.3 12 4.2l8.5 7.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.1V19.6h4.2v-5.1h3.6v5.1H18V10.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <h1>발견공백 <b>도우미</b></h1>
     <p class="sub">한국 생물종의 발견공백을 대화로 물어보세요. 지역·분류군·멸종위기 기준으로 아직 기록이 없는 종을 찾아 드립니다.</p>
   </header>
