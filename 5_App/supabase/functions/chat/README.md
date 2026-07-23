@@ -5,7 +5,7 @@
 
 ## 활성화 순서
 
-1. **스키마** — `5_App/supabase/conversational_service.sql` 적용(마이그레이션 `conversational_service_reference`로 이미 반영).
+1. **스키마** — `5_App/supabase/conversational_service.sql` 적용(마이그레이션 `conversational_service_reference`로 이미 반영), 이어서 `5_App/supabase/conversational_service_taxon.sql` 적용(과·속 질의 지원 — `fg_species.family_la/genus_la` + `fg_taxon_name`).
 
 2. **데이터 적재** — `.env`에 `SUPABASE_DB_URL` 추가 후 실행:
    - 값: Supabase Dashboard → Project Settings → Database → Connection string → URI.
@@ -33,5 +33,9 @@
 ## 도구
 
 `find_region` · `region_discovery_summary` · `undiscovered_priority_species` ·
-`search_species` · `species_detail` · `list_protected_species` · `taxa_summary`.
+`search_species` · `species_detail` · `list_protected_species` · `taxa_summary` ·
+`list_species_by_taxon`(강·목·과·속 단위 종 목록·발견상태. 과·속의 한글명은 `fg_taxon_name`으로
+해석(매핑에 없으면 라틴 학명 그대로 시도 — `taxon_ko.js` 기반이라 사진 보유 종 범위만 커버).
+강·목은 한글 매핑이 없어 라틴 학명만 지원. KTSN 마스터 분류 단계가 강-목-과-속-종/아종뿐이라
+아과·족 등은 지원 범위 밖 — `3_ETL/DATA_PIPELINE.md` 참고).
 발견 정의: 발견=최근 10년 내 기록, 휴면=기록은 있으나 10년 이상 미보고, 미발견=기록 없음.

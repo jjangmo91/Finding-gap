@@ -180,6 +180,54 @@ async function listProtectedSpecies(a: Record<string, unknown>) {
   return { scope: "national", protected_default: isDefault, count: rows.length, species: rows };
 }
 
+const TAXON_RANK_COL: Record<string, string> = { class: "class_la", order: "order_la", family: "family_la", genus: "genus_la" };
+const TAXON_RANK_KOR: Record<string, string> = { class: "강", order: "목", family: "과", genus: "속" };
+
+async function listSpeciesByTaxon(a: Record<string, unknown>) {
+  const rank = String(a.rank ?? "").trim().toLowerCase();
+  const col = TAXON_RANK_COL[rank];
+  if (!col) return { error: "rank 는 class(강)·order(목)·family(과)·genus(속) 중 하나여야 합니다." };
+  const nameRaw = String(a.name ?? "").trim();
+  if (!nameRaw) return { error: "분류명(강/목/과/속)이 필요합니다." };
+
+  // 한글 분류명 → 라틴명 해석: family/genus 만 매핑 테이블이 있음(taxon_ko.js 는 사진 보유 종 범위라 일부만 커버).
+  // class/order 는 한글 매핑 소스가 없어 입력값을 라틴명으로 간주(Gemini 가 스스로 학명으로 바꿔 넘기도록 시스템 프롬프트에서 안내).
+  const ko = (rank === "family" || rank === "genus")
+    ? (await sql`select latin from fg_taxon_name where rank = ${rank} and korean = ${nameRaw} limit 1`)[0]
+    : undefined;
+  const latin = ko?.latin ?? nameRaw;
+
+  const code = String(a.region ?? "").trim();
+  if (code && code.length !== 2 && code.length !== 5) return { error: "region 은 시도(2자리) 또는 시군구(5자리) 코드여야 합니다." };
+  const rcol = code ? regionField(code) : "sido";
+  const state = String(a.state ?? "").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(Number(a.limit ?? 30), 100));
+
+  const rows = await sql`
+    select s.ktsn, s.korean_name, s.scientific_name,
+           s.class_la, s.order_la, s.family_la, s.genus_la,
+           s.endangered_grade, s.national_redlist_category, s.interest, g.my
+    from fg_species s
+    left join (
+      select ktsn, max(maxyear) my from fg_species_region
+      ${code ? sql`where ${sql(rcol)} = ${code}` : sql``}
+      group by ktsn) g on g.ktsn = s.ktsn
+    where lower(s.${sql(col)}) = lower(${latin})
+    order by s.korean_name
+    limit ${limit}`;
+  if (!rows.length) {
+    return { error: `'${nameRaw}'(${TAXON_RANK_KOR[rank]})에 해당하는 종을 찾지 못했습니다. 라틴 학명으로 다시 시도해 보세요(예: family=Lucanidae, order=Coleoptera).` };
+  }
+  const withState = rows.map((r) => {
+    const my = r.my as number | null;
+    const st = !my ? "undiscovered" : my >= CUTOFF ? "found" : "dormant";
+    const { my: _drop, ...rest } = r;
+    return { ...rest, state: st };
+  });
+  const filtered = state ? withState.filter((r) => r.state === state) : withState;
+  return { rank, name: nameRaw, latin, region: code || null, count: filtered.length, species: filtered };
+}
+
 async function taxaSummary() {
   const rows = await sql`
     select t.taxon_group, t.taxon_group_kor, t.n_species,
@@ -207,6 +255,7 @@ const TOOLS: Record<string, (a: Record<string, unknown>) => Promise<unknown>> = 
   species_detail: speciesDetail,
   list_protected_species: listProtectedSpecies,
   taxa_summary: taxaSummary,
+  list_species_by_taxon: listSpeciesByTaxon,
 };
 
 // Gemini functionDeclarations — 도구 이름·인자 스키마.
@@ -225,6 +274,14 @@ const DECLARATIONS = [
     parameters: { type: "OBJECT", properties: { region: { type: "STRING" }, endangered_grade: { type: "STRING" }, redlist_category: { type: "STRING" }, state: { type: "STRING", description: "undiscovered/found/dormant" }, taxon_group: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "taxa_summary", description: "9개 분류군별 종수·전국 발견/휴면/미발견 요약.",
     parameters: { type: "OBJECT", properties: {} } },
+  { name: "list_species_by_taxon", description: "특정 강(class)·목(order)·과(family)·속(genus)에 속한 종 목록과 발견 상태(발견/휴면/미발견). 과·속은 한글 분류명(예: 사슴벌레과)도 가능하지만, 강·목은 한글 매핑이 없으니 라틴 학명으로 넘길 것(모르면 학명으로 스스로 변환).",
+    parameters: { type: "OBJECT", properties: {
+      rank: { type: "STRING", description: "class(강)·order(목)·family(과)·genus(속) 중 하나" },
+      name: { type: "STRING", description: "분류명 — family/genus는 한글(예: 사슴벌레과) 또는 라틴 가능, class/order는 라틴 학명(예: Coleoptera)만" },
+      region: { type: "STRING", description: "시도 2자리 또는 시군구 5자리 코드(선택, 지역 한정 시 find_region 으로 먼저 코드 확인)" },
+      state: { type: "STRING", description: "found/dormant/undiscovered 로 필터(선택)" },
+      limit: { type: "INTEGER" },
+    }, required: ["rank", "name"] } },
 ];
 
 const SYSTEM = `당신은 '발견공백 도우미'입니다. 한국의 생물종 '발견공백'(국가생물종목록에는 있으나 국내 조사자료에 관측 기록이 없거나 오래된 종)을 안내합니다.
@@ -241,6 +298,7 @@ const SYSTEM = `당신은 '발견공백 도우미'입니다. 한국의 생물종
 - 멸종위기·적색목록 종 목록 → list_protected_species (region+state 로 지역별 상태 필터).
 - 특정 종의 전국 발견 상태 → search_species 로 ktsn 을 찾고 species_detail.
 - 전국 분류군별 요약 → taxa_summary (특정 지역 질문에는 쓰지 마세요).
+- 특정 강·목·과·속(예: 사슴벌레과, 하늘소과, 진달래속, 딱정벌레목)에 속한 종 목록·미발견 종 → list_species_by_taxon (rank=class|order|family|genus). 과·속은 한글명을 그대로 넘겨도 되지만, 강·목은 한글 매핑이 없으니 당신이 아는 라틴 학명으로 바꿔서 넘기세요(예: 딱정벌레목→Coleoptera). taxon_group(9개 대분류: 곤충류 등)과는 다른 개념이니 혼동하지 마세요. KTSN 분류체계는 강-목-과-속-종/아종까지만 있고 아과·족은 지원하지 않습니다 — 물어보면 그렇게 안내하세요.
 - taxon_group 인자에는 코드를 넘기세요: IN=곤충류, IV=무척추동물(곤충제외), VP=관속식물, -P=어류, MS=선태류, AV=조류, MM=포유류, RP=파충류, AM=양서류.`;
 
 async function callGemini(contents: unknown[]) {
