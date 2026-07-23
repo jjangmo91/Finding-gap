@@ -20,8 +20,8 @@
   header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:20px;letter-spacing:-.01em}
   header h1 b{color:var(--accent)}
-  header .back{font-size:12.5px;color:var(--muted);text-decoration:none;border:1px solid var(--line);
-    border-radius:8px;padding:6px 11px;background:#fff}
+  header .back{color:var(--muted);text-decoration:none;border:1px solid var(--line);
+    border-radius:8px;padding:7px 9px;background:#fff;display:inline-flex;align-items:center;justify-content:center}
   header .back:hover{border-color:var(--accent);color:var(--accent)}
   .tabs{display:flex;gap:6px;margin:16px 0 14px;border-bottom:1px solid var(--line)}
   .tabs button{border:0;background:none;padding:10px 16px;font-size:14px;cursor:pointer;color:#666;
@@ -302,7 +302,7 @@
 <div class="wrap">
   <header>
     <h1><b>Finding gap</b> · 서비스</h1>
-    <a class="back" href="index.html">← 홈</a>
+    <a class="back" href="index.html" aria-label="홈" title="홈"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block"><path d="M3.5 11.3 12 4.2l8.5 7.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.1V19.6h4.2v-5.1h3.6v5.1H18V10.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
   </header>
 
   <div class="tabs">
