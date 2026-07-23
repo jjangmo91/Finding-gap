@@ -79,18 +79,17 @@ def load_table(sqlite_conn, pg_cursor, table_name, columns, query):
 
 
 def load_taxon_name(pg_cursor):
-    """taxon_ko.js(과·속 라틴↔한글, media 보유 종 범위)를 fg_taxon_name 에 적재."""
-    path = Path('5_App/demo/data/taxon_ko.js')
+    """KTSN 전체(강·목·과·속 라틴↔한글)를 fg_taxon_name 에 적재.
+    출처: 7_MCP/data/taxon_names.json.gz (python 7_MCP/build_taxon_names.py 로 생성)."""
+    path = Path('7_MCP/data/taxon_names.json.gz')
     if not path.exists():
-        print(f"(경고) 건너뜀: {path} 없음 — python 5_App/build_taxon_ko.py 로 먼저 생성하세요.")
+        print(f"(경고) 건너뜀: {path} 없음 — python 7_MCP/build_taxon_names.py 로 먼저 생성하세요.")
         return
-    m = re.match(r"window\.__TAXON_KO__=(.*);\s*$", path.read_text(encoding="utf-8").strip(), re.S)
-    if not m:
-        print(f"(경고) {path} 형식을 읽지 못했습니다.")
-        return
-    data = json.loads(m.group(1))
-    rows = [("family", la, ko) for la, ko in data.get("fam", {}).items()]
-    rows += [("genus", la, ko) for la, ko in data.get("gen", {}).items()]
+    with gzip.open(path, 'rt', encoding='utf-8') as f:
+        data = json.load(f)
+    rows = [(rank, la, ko)
+            for rank in ('class', 'order', 'family', 'genus')
+            for la, ko in data.get(rank, {}).items()]
     pg_cursor.execute("TRUNCATE public.fg_taxon_name;")
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator='\n')
