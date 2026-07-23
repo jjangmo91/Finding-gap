@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>제주특별자치도 어류 발견공백 (미발견 1133종) · Finding gap</title>
+<meta name="description" content="제주특별자치도 어류 발견공백: 국가생물종목록 1379종 중 최근 10년 관측 기록이 없는 미발견 1133종(82%). 시민 관찰로 채울 수 있는 종과 지도를 확인하세요.">
+<link rel="canonical" href="https://rachhus.github.io/Finding-gap/regions/jeju-fish.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Finding gap">
+<meta property="og:title" content="제주특별자치도 어류 발견공백 (미발견 1133종) · Finding gap">
+<meta property="og:description" content="제주특별자치도 어류 발견공백: 국가생물종목록 1379종 중 최근 10년 관측 기록이 없는 미발견 1133종(82%). 시민 관찰로 채울 수 있는 종과 지도를 확인하세요.">
+<meta property="og:url" content="https://rachhus.github.io/Finding-gap/regions/jeju-fish.html">
+<meta property="og:image" content="https://rachhus.github.io/Finding-gap/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="제주특별자치도 어류 발견공백 (미발견 1133종) · Finding gap">
+<meta name="twitter:description" content="제주특별자치도 어류 발견공백: 국가생물종목록 1379종 중 최근 10년 관측 기록이 없는 미발견 1133종(82%). 시민 관찰로 채울 수 있는 종과 지도를 확인하세요.">
+<meta name="twitter:image" content="https://rachhus.github.io/Finding-gap/og.png">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#fafaf8;color:#1b201d;font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;line-height:1.6}
+a{color:inherit}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px 56px}
+header{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+header .home{color:#6b7280;border:1px solid #e7e7e2;border-radius:8px;padding:7px 9px;background:#fff;text-decoration:none;display:inline-flex;align-items:center}
+header .home:hover{color:#2f6f5e;border-color:#2f6f5e}
+header .brand{font-size:13.5px;color:#6b7280;text-decoration:none}
+header .brand b{color:#2f6f5e}
+.crumb{font-size:12.5px;color:#9aa0a6;margin-bottom:6px}
+.crumb a{text-decoration:none} .crumb a:hover{color:#2f6f5e}
+h1{font-size:23px;letter-spacing:-.01em;margin:0 0 6px}
+.lead{color:#4b5563;font-size:14.5px;margin:0 0 20px}
+.stats{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+.stat{flex:1 1 150px;background:#fff;border:1px solid #e7e7e2;border-radius:12px;padding:14px 16px}
+.stat .n{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.stat .l{font-size:12px;color:#6b7280;margin-top:2px}
+.stat.gap .n{color:#d73027} .stat.found .n{color:#2f6f5e}
+.cta{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:26px}
+.cta a{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;text-decoration:none;border-radius:9px;padding:9px 15px}
+.cta a.primary{background:#2f6f5e;color:#fff}
+.cta a.primary:hover{background:#255a4c}
+.cta a.sec{background:#fff;color:#33403b;border:1px solid #e7e7e2}
+.cta a.sec:hover{border-color:#2f6f5e;color:#2f6f5e}
+h2{font-size:16px;margin:26px 0 10px}
+.sub{font-size:12.5px;color:#6b7280;margin:-6px 0 14px}
+.splist{list-style:none;padding:0;margin:0;border:1px solid #e7e7e2;border-radius:12px;overflow:hidden;background:#fff}
+.splist li{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #f1f1ee;font-size:13.5px}
+.splist li:first-child{border-top:0}
+.splist .rank{color:#9aa0a6;font-variant-numeric:tabular-nums;font-size:12px;min-width:20px}
+.splist .nm{font-weight:600}
+.splist .sci{color:#6b7280;font-style:italic;font-size:12.5px}
+.splist .badges{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.badge{font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;white-space:nowrap}
+.badge.eg{background:#fdeae4;color:#c2410c} .badge.eg1{background:#fbe4e2;color:#7f1d1d}
+.badge.rl{background:#eef3f1;color:#2f6f5e}
+.empty{background:#fff;border:1px solid #e7e7e2;border-radius:12px;padding:16px;color:#6b7280;font-size:13.5px}
+.nav{margin-top:30px}
+.nav h3{font-size:12.5px;color:#6b7280;font-weight:600;margin:0 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.chips a{font-size:12.5px;text-decoration:none;border:1px solid #e7e7e2;background:#fff;border-radius:999px;padding:5px 11px;color:#3a4a43}
+.chips a:hover{border-color:#2f6f5e;color:#2f6f5e}
+.chips a.on{background:#2f6f5e;color:#fff;border-color:#2f6f5e}
+footer{margin-top:34px;padding-top:16px;border-top:1px solid #e7e7e2;font-size:11.5px;color:#9aa0a6;line-height:1.7}
+@media(max-width:560px){ h1{font-size:20px} .stat .n{font-size:22px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="home" href="../index.html" aria-label="홈" title="홈"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="display:block"><path d="M3.5 11.3 12 4.2l8.5 7.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.1V19.6h4.2v-5.1h3.6v5.1H18V10.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <a class="brand" href="../index.html"><b>Finding gap</b> · 발견공백</a>
+  </header>
+  <nav class="crumb"><a href="index.html">지역·분류군</a> › 제주특별자치도 › 어류</nav>
+  <h1>제주특별자치도 어류 발견공백</h1>
+  <p class="lead">국가생물종목록 1379종 가운데 최근 10년(2016년~) 안에 제주특별자치도에서 관측 기록이 없는 <b>미발견(공백) 1133종</b>입니다.</p>
+  <div class="stats">
+    <div class="stat"><div class="n">1379</div><div class="l">국가생물종목록 어류</div></div>
+    <div class="stat found"><div class="n">246</div><div class="l">최근 발견</div></div>
+    <div class="stat gap"><div class="n">1133</div><div class="l">미발견(공백) · 82%</div></div>
+  </div>
+  <div class="cta">
+    <a class="primary" href="../service.html?taxon=-P&sido=39&metric=gap">지도에서 보기 →</a>
+    <a class="sec" href="../chat.html">대화로 물어보기</a>
+  </div>
+  <h2>주목할 미발견 종</h2>
+  <p class="sub">관심도(관측·위키 조회수·관심종) 순 상위. 관찰 기록이 공백을 메웁니다.</p>
+  <ul class="splist"><li><span class="rank">1</span><span class="nm">새미</span><span class="sci">Ladislavia taczanowskii</span><span class="badges"><span class="badge eg">멸종위기 II급</span><span class="badge rl">적색 VU</span></span></li><li><span class="rank">2</span><span class="nm">참갈겨니</span><span class="sci">Zacco koreanus</span><span class="badges"></span></li><li><span class="rank">3</span><span class="nm">갈겨니</span><span class="sci">Zacco temminckii</span><span class="badges"></span></li><li><span class="rank">4</span><span class="nm">끄리</span><span class="sci">Opsariichthys uncirostris amurensis</span><span class="badges"></span></li><li><span class="rank">5</span><span class="nm">대륙송사리</span><span class="sci">Oryzias sinensis</span><span class="badges"></span></li><li><span class="rank">6</span><span class="nm">꾹저구</span><span class="sci">Gymnogobius urotaenia</span><span class="badges"></span></li><li><span class="rank">7</span><span class="nm">모래무지</span><span class="sci">Pseudogobio esocinus</span><span class="badges"></span></li><li><span class="rank">8</span><span class="nm">점줄종개</span><span class="sci">Cobitis nalbanti</span><span class="badges"></span></li><li><span class="rank">9</span><span class="nm">피라미</span><span class="sci">Zacco platypus</span><span class="badges"></span></li><li><span class="rank">10</span><span class="nm">미꾸라지</span><span class="sci">Misgurnus mizolepis</span><span class="badges"></span></li><li><span class="rank">11</span><span class="nm">대륙종개</span><span class="sci">Orthrias nudus</span><span class="badges"></span></li><li><span class="rank">12</span><span class="nm">납지리</span><span class="sci">Acheilognathus rhombeus</span><span class="badges"></span></li><li><span class="rank">13</span><span class="nm">납자루</span><span class="sci">Acheilognathus lanceolata intermedia</span><span class="badges"></span></li><li><span class="rank">14</span><span class="nm">송사리</span><span class="sci">Oryzias latipes</span><span class="badges"></span></li><li><span class="rank">15</span><span class="nm">동자개</span><span class="sci">Pseudobagrus fulvidraco</span><span class="badges"></span></li><li><span class="rank">16</span><span class="nm">줄몰개</span><span class="sci">Gnathopogon strigatus</span><span class="badges"></span></li><li><span class="rank">17</span><span class="nm">돌고기</span><span class="sci">Pungtungia herzi</span><span class="badges"></span></li><li><span class="rank">18</span><span class="nm">메기</span><span class="sci">Silurus asotus</span><span class="badges"></span></li><li><span class="rank">19</span><span class="nm">버들개</span><span class="sci">Rhynchocypris steindachneri</span><span class="badges"></span></li><li><span class="rank">20</span><span class="nm">가시납지리</span><span class="sci">Acheilognathus chankaensis</span><span class="badges"></span></li></ul>
+  <div class="nav">
+    <h3>같은 지역 · 다른 분류군</h3>
+    <div class="chips"><a class="" href="jeju-mammals.html">포유류</a><a class="" href="jeju-birds.html">조류</a><a class="" href="jeju-reptiles.html">파충류</a><a class="" href="jeju-amphibians.html">양서류</a><a class="on" href="jeju-fish.html">어류</a><a class="" href="jeju-insects.html">곤충류</a><a class="" href="jeju-invertebrates.html">무척추동물(곤충제외)</a><a class="" href="jeju-vascular-plants.html">관속식물</a><a class="" href="jeju-bryophytes.html">선태류</a></div>
+    <h3>같은 분류군 · 다른 지역</h3>
+    <div class="chips"><a class="" href="seoul-fish.html">서울</a><a class="" href="busan-fish.html">부산</a><a class="" href="daegu-fish.html">대구</a><a class="" href="incheon-fish.html">인천</a><a class="" href="gwangju-fish.html">광주</a><a class="" href="daejeon-fish.html">대전</a><a class="" href="ulsan-fish.html">울산</a><a class="" href="sejong-fish.html">세종</a><a class="" href="gyeonggi-fish.html">경기</a><a class="" href="gangwon-fish.html">강원</a><a class="" href="chungbuk-fish.html">충청북</a><a class="" href="chungnam-fish.html">충청남</a><a class="" href="jeonbuk-fish.html">전북</a><a class="" href="jeonnam-fish.html">전라남</a><a class="" href="gyeongbuk-fish.html">경상북</a><a class="" href="gyeongnam-fish.html">경상남</a><a class="on" href="jeju-fish.html">제주</a></div>
+  </div>
+  <footer>
+    발견공백 = 국가생물종목록 − 최근 10년 관측(동적). 출처: 국립생물자원관 KTSN · EcoBank · GBIF · 국립공원.
+    종 상세 © 국립생물자원관 한반도의 생물다양성. 기준연도 2026 · 생성 자동.
+    본 통계는 조사 노력의 공백을 함께 반영하며 실제 부재를 의미하지 않습니다.
+  </footer>
+</div>
+</body>
+</html>

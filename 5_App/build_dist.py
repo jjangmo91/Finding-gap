@@ -107,6 +107,13 @@ def main():
         f'window.CHAT_ENABLED = {"true" if chat_on else "false"};\n', encoding="utf-8")
     (DIST / "_headers").write_text(HEADERS, encoding="utf-8")
 
+    # 지역·분류군 프로필 페이지(SEO·공유) + sitemap·robots·OG — 출력 정리 이후 기록(로드맵 ④)
+    try:
+        from build_profiles import generate as gen_profiles
+        gen_profiles(DIST)
+    except Exception as e:
+        print(f"(경고) 프로필 페이지 생성 건너뜀: {e}")
+
     total = sum(p.stat().st_size for p in DIST.rglob("*") if p.is_file())
     print(f"dist 조립 완료 → {DIST.relative_to(BASE)}")
     print(f"  파일 {sum(1 for _ in DIST.rglob('*') if _.is_file())}개 · 총 {total/1_048_576:.1f} MB")

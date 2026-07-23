@@ -468,6 +468,7 @@ function renderFoot(){
   const totRec=TAXA.reduce((a,t)=>a+(t.n_records||0),0);
   const nData=TAXA.filter(t=>t.has_data).length;
   document.getElementById('foot').innerHTML=
+    `<a href="regions/index.html" style="color:#2f6f5e;font-weight:600;text-decoration:none">지역·분류군별 발견공백 요약 →</a><br>`+
     `출처: 국가생물종목록(KTSN) · 국립생태원 EcoBank · 국립공원공단 생물자원현황 · GBIF<br>`+
     `생성 ${gen} · 좌표계 EPSG:4326 · 갱신주기 6개월 · 누적관측 ${nf(totRec)} · ${nData}개 분류군 데이터<br>`+
     `gap = 국가생물종목록(마스터) − 관측(동적 complement). 데이터는 정기 수집으로 갱신됩니다.`;
