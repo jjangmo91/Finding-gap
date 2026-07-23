@@ -11,6 +11,7 @@ import sys
 import gzip
 import csv
 import io
+import json
 import sqlite3
 from pathlib import Path
 
@@ -77,9 +78,31 @@ def load_table(sqlite_conn, pg_cursor, table_name, columns, query):
         pg_cursor.copy_expert(copy_sql, buf)
 
 
+def load_taxon_name(pg_cursor):
+    """taxon_ko.js(과·속 라틴↔한글, media 보유 종 범위)를 fg_taxon_name 에 적재."""
+    path = Path('5_App/demo/data/taxon_ko.js')
+    if not path.exists():
+        print(f"(경고) 건너뜀: {path} 없음 — python 5_App/build_taxon_ko.py 로 먼저 생성하세요.")
+        return
+    m = re.match(r"window\.__TAXON_KO__=(.*);\s*$", path.read_text(encoding="utf-8").strip(), re.S)
+    if not m:
+        print(f"(경고) {path} 형식을 읽지 못했습니다.")
+        return
+    data = json.loads(m.group(1))
+    rows = [("family", la, ko) for la, ko in data.get("fam", {}).items()]
+    rows += [("genus", la, ko) for la, ko in data.get("gen", {}).items()]
+    pg_cursor.execute("TRUNCATE public.fg_taxon_name;")
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator='\n')
+    writer.writerows(rows)
+    buf.seek(0)
+    pg_cursor.copy_expert(
+        "COPY public.fg_taxon_name (rank, latin, korean) FROM STDIN WITH (FORMAT csv)", buf)
+
+
 def verify_tables(pg_cursor):
     """로드된 행 수 확인."""
-    for table in ['fg_species', 'fg_species_region', 'fg_region', 'fg_taxa']:
+    for table in ['fg_species', 'fg_species_region', 'fg_region', 'fg_taxa', 'fg_taxon_name']:
         pg_cursor.execute(f"SELECT count(*) FROM public.{table};")
         count = pg_cursor.fetchone()[0]
         print(f"  {table}: {count}행")
@@ -103,10 +126,12 @@ def main():
 
         load_table(sqlite_conn, pg_cursor, 'fg_species',
                    ['ktsn', 'korean_name', 'scientific_name', 'taxon_group',
-                    'taxon_group_kor', 'endangered_grade', 'national_redlist_category',
+                    'taxon_group_kor', 'family_la', 'genus_la',
+                    'endangered_grade', 'national_redlist_category',
                     'has_media', 'interest'],
                    "SELECT ktsn, korean_name, scientific_name, taxon_group, "
-                   "taxon_group_kor, endangered_grade, national_redlist_category, "
+                   "taxon_group_kor, family_la, genus_la, "
+                   "endangered_grade, national_redlist_category, "
                    "has_media, interest FROM species")
 
         load_table(sqlite_conn, pg_cursor, 'fg_species_region',
@@ -121,6 +146,8 @@ def main():
         load_table(sqlite_conn, pg_cursor, 'fg_taxa',
                    ['taxon_group', 'taxon_group_kor', 'n_species'],
                    "SELECT taxon_group, taxon_group_kor, n_species FROM taxa")
+
+        load_taxon_name(pg_cursor)
 
         print("검증:")
         verify_tables(pg_cursor)
