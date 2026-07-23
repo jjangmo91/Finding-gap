@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Finding gap 브랜드 아이콘/공유이미지 생성.
+"""Finding gap 브랜드 아이콘 생성.
 실제 시도 경계(5_App/demo/data/sido.geojson)를 저해상도 격자로 래스터화해
 "한국 지도 + 발견공백(격자 결손)" 모티프를 만든다 — 서비스의 1km 격자 발견공백
 지도와 같은 시각 언어. 색은 실제 UI의 발견(--accent 녹색)·미발견(러스트) 배지 색을 그대로 사용.
 
-산출(5_App/, docs/ 양쪽에 동일 복사):
-  favicon.svg · favicon.ico · apple-touch-icon.png(180) · icon-512.png · og-image.png(1200x630)
+산출(5_App/, docs/ 양쪽에 동일 복사): favicon.svg · favicon.ico · apple-touch-icon.png(180) · icon-512.png
+공유(OG) 이미지는 이 스크립트가 아니라 5_App/build_profiles.py 가 생성하는 og.png 를 공용으로 사용
+(브랜드 이미지 중복 방지 — 텍스트형 og.png 로 통일, 이 아이콘은 파비콘 전용).
 
 사용: python 5_App/design/gen_brand_icon.py
 재실행 시 매번 같은 결과(고정 시드 없음 — 격자 래스터화·틈 선정 모두 결정적 알고리즘).
@@ -15,7 +16,7 @@ import math
 import shutil
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 APP = ROOT / "5_App"
@@ -25,13 +26,9 @@ GEOJSON = APP / "demo" / "data" / "sido.geojson"
 GREEN = (47, 111, 94)     # --accent / 발견(found) — index.html discBadge 와 동일
 RUST = (181, 72, 47)      # 미발견(undiscovered) — index.html discBadge 와 동일
 CREAM = (250, 250, 248)   # --bg
-INK = (27, 32, 29)        # --ink
-MUTED = (107, 114, 128)   # --muted
 
 ROWS = 22
 N_GAPS = 3
-FONT_BOLD = "C:/Windows/Fonts/malgunbd.ttf"
-FONT_REG = "C:/Windows/Fonts/malgun.ttf"
 
 
 def load_grid():
@@ -169,22 +166,11 @@ def main():
 
     write_svg(grid, gaps, APP / "favicon.svg")
 
-    og = Image.new("RGB", (1200, 630), CREAM)
-    art = render_grid(grid, gaps, 16)
-    ox, oy = 80, (630 - art.height) // 2
-    og.paste(art, (ox, oy), art)
-    draw = ImageDraw.Draw(og)
-    tx = ox + art.width + 70
-    draw.text((tx, 230), "Finding gap", font=ImageFont.truetype(FONT_BOLD, 64), fill=INK)
-    draw.text((tx, 312), "국가 생물종 발견공백", font=ImageFont.truetype(FONT_REG, 30), fill=MUTED)
-    draw.text((tx, 352), "아직 발견되지 않은 종을 지도에서 찾아보세요",
-              font=ImageFont.truetype(FONT_REG, 30), fill=MUTED)
-    og.save(APP / "og-image.png")
-
-    for name in ("icon-512.png", "apple-touch-icon.png", "favicon.ico", "favicon.svg", "og-image.png"):
+    names = ("icon-512.png", "apple-touch-icon.png", "favicon.ico", "favicon.svg")
+    for name in names:
         shutil.copy2(APP / name, DOCS / name)
 
-    print("생성 완료:", ", ".join(["icon-512.png", "apple-touch-icon.png", "favicon.ico", "favicon.svg", "og-image.png"]))
+    print("생성 완료:", ", ".join(names))
 
 
 if __name__ == "__main__":

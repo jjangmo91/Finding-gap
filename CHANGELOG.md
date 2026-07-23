@@ -13,7 +13,8 @@ Finding gap의 릴리스 단위 변경 이력입니다.
 ### 배포 전 확인
 - `5_App/supabase/reports_photo.sql`을 Supabase SQL Editor에서 적용해야 사진 업로드가 동작함(`reports.sql` 적용 후).
 
-- 브랜드 아이콘·공유 이미지 추가 — 파비콘(svg/ico)·apple-touch-icon·OG 공유 이미지. 실제 시도 경계(sido.geojson)를 저해상도 격자로 래스터화해 "한국 지도 + 발견공백(격자 결손)" 모티프로 구성(색은 기존 발견/미발견 배지 색 재사용). 생성 스크립트: `5_App/design/gen_brand_icon.py`. 4개 페이지(index/service/quiz/chat)에 파비콘·OG 메타 태그 반영.
+- 브랜드 파비콘 추가(svg/ico·apple-touch-icon) — 실제 시도 경계(sido.geojson)를 저해상도 격자로 래스터화해 "한국 지도 + 발견공백(격자 결손)" 모티프로 구성(색은 기존 발견/미발견 배지 색 재사용). 생성 스크립트: `5_App/design/gen_brand_icon.py`.
+- 4개 페이지(index/service/quiz/chat)에 파비콘 링크 + OG/Twitter 공유 메타 태그 추가 — 공유 이미지는 `build_profiles.py`가 만드는 `og.png`로 site 공통 통일(지역·분류군 SEO 페이지와 동일 이미지).
 
 ## [0.9.0] - 2026-07-02
 
