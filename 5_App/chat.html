@@ -47,11 +47,14 @@
   .msg.bot{align-self:flex-start;background:#f1f3f1;color:var(--ink);border-bottom-left-radius:5px}
   .msg.err{align-self:flex-start;background:#fbeeea;color:#9a3412;border:1px solid #f1d2c6}
   .msg .tools{display:block;margin-top:6px;font-size:10.5px;color:var(--faint)}
-  .msg .maplink{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;font-weight:600;
+  .msg .maplink{display:inline-flex;align-items:center;gap:5px;margin-top:8px;margin-right:6px;font-size:12px;font-weight:600;
     color:var(--accent);text-decoration:none;border:1px solid #cdddce;background:#f4f8f6;border-radius:8px;padding:6px 11px;
     appearance:none;font-family:inherit;cursor:pointer}
   .msg .maplink:hover{border-color:var(--accent);background:#eaf3ee}
   .msg .maplink.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .msg .maplink.rep{color:#9a5a1a;border-color:#e6cfa8;background:#fdf6ea}
+  .msg .maplink.rep:hover{border-color:#c98a2e;background:#f8ead2}
+  .msg .maplink.rep.on{background:#b26a1a;color:#fff;border-color:#b26a1a}
   .typing{align-self:flex-start;color:var(--faint);font-size:13px}
   .chips{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;
@@ -255,10 +258,14 @@ function chatView(user){
       } else {
         const tools = (out.used_tools && out.used_tools.length) ? `<span class="tools">조회: ${esc([...new Set(out.used_tools)].join(', '))}</span>` : '';
         const href = mapHref(out.map);
-        const maplink = href ? `<button class="maplink" data-href="${esc(href)}">지도에서 보기 →</button>` : '';
-        const node = bubble('bot', esc(out.reply || '') + tools + maplink);
-        const mb = node && node.querySelector('.maplink');
-        if(mb) mb.onclick = () => openMap(mb.dataset.href, mb);
+        let actions = '';
+        if(href){
+          actions += `<button class="maplink" data-href="${esc(href)}">지도에서 보기 →</button>`;
+          if(out.map && out.map.mode==='B')                    // 종별 답변 → 제보 루프(패널서 해당 종 제보 모달 자동 오픈)
+            actions += `<button class="maplink rep" data-href="${esc(href + '&report=1')}">이 종 제보하기 →</button>`;
+        }
+        const node = bubble('bot', esc(out.reply || '') + tools + actions);
+        node && node.querySelectorAll('.maplink').forEach(b => b.onclick = () => openMap(b.dataset.href, b));
         msgs.push({ role: 'assistant', content: out.reply || '' });
         if (typeof out.remaining === 'number' && rem) rem.textContent = `오늘 남은 질문 ${out.remaining}회`;
       }

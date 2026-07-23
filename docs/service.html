@@ -1206,7 +1206,10 @@ function boot(){
   // 딥링크 ?sp=<ktsn> — 마이데이터 관심 종에서 진입(모드 B로 해당 종 카드 열기)
   const spk=p.get('sp');
   if(spk){ const sp=SPIDX.find(x=>x.k===spk);
-    if(sp){ setMode('B'); if(window.sTaxon){sTaxon.value='';sTax='';} if(window.q){q.value=sp.n||sp.s; doSearch();} showSpecies(sp); } }
+    if(sp){ setMode('B'); if(window.sTaxon){sTaxon.value='';sTax='';} if(window.q){q.value=sp.n||sp.s; doSearch();} showSpecies(sp);
+      // 챗 딥링크 액션: ?report=1 → 제보 모달 자동 오픈(해당 종 미리 선택). 처리는 로드 순서상 뒤의 제보 모듈이 담당.
+      if(p.get('report')==='1') window.FG_ACTION={sp:spk, act:'report'};
+    } }
 }
 boot();
 </script>
@@ -1483,6 +1486,9 @@ if(configured){
   refreshCardBtn();
   onAuth(u=>{ user=u; refreshCardBtn(); if(!overlay.hidden) render(); });
   checkHash();
+  // 챗 딥링크 ?sp=..&report=1 → 해당 종 미리 선택해 제보 모달 자동 오픈(로그인 여부는 render가 게이트)
+  const act=window.FG_ACTION;
+  if(act && act.act==='report'){ const sp=SPIDX.find(s=>s.k===act.sp); if(sp) open(sp); }
 }
 </script>
 </body>
