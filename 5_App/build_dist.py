@@ -19,7 +19,8 @@ DIST = BASE / "6_Deliverables" / "dist"
 DATA = APP / "demo" / "data"
 
 # dist 에 포함할 정적 자산(서비스/대문이 실제 참조하는 것만)
-PAGES = ["index.html", "service.html", "fg_supabase.js", "fg_analytics.js", "quiz.html", "chat.html"]
+PAGES = ["index.html", "service.html", "fg_supabase.js", "fg_analytics.js", "quiz.html", "chat.html",
+         "favicon.svg", "favicon.ico", "apple-touch-icon.png", "icon-512.png", "og-image.png"]
 DATA_FILES = ["taxa_summary.js", "demo_mm.js",
               "species_index.js", "species_state.js", "species_interest.js", "sido.geojson", "sigungu.geojson",
               "env_meta.js", "species_env.js",
