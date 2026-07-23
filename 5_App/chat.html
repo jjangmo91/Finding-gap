@@ -7,7 +7,7 @@
 <style>
   :root{
     --ink:#1b201d; --muted:#6b7280; --faint:#9aa0a6; --line:#e7e7e2; --bg:#fafaf8; --card:#fff;
-    --accent:#2f6f5e; --radius:12px;
+    --accent:#2f6f5e; --radius:12px; --mapw:min(58vw,780px);
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -48,8 +48,10 @@
   .msg.err{align-self:flex-start;background:#fbeeea;color:#9a3412;border:1px solid #f1d2c6}
   .msg .tools{display:block;margin-top:6px;font-size:10.5px;color:var(--faint)}
   .msg .maplink{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;font-weight:600;
-    color:var(--accent);text-decoration:none;border:1px solid #cdddce;background:#f4f8f6;border-radius:8px;padding:6px 11px}
+    color:var(--accent);text-decoration:none;border:1px solid #cdddce;background:#f4f8f6;border-radius:8px;padding:6px 11px;
+    appearance:none;font-family:inherit;cursor:pointer}
   .msg .maplink:hover{border-color:var(--accent);background:#eaf3ee}
+  .msg .maplink.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .typing{align-self:flex-start;color:var(--faint);font-size:13px}
   .chips{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;
@@ -61,6 +63,28 @@
   .inrow textarea:focus{outline:none;border-color:var(--accent)}
   .note{margin-top:10px;font-size:11px;color:var(--faint);line-height:1.5}
   @media(max-width:560px){ .msg{max-width:90%} }
+  /* 대화 옆 지도 패널 — 새 탭 대신 인라인으로 열어 대화 연속성 유지 */
+  #mapPanel{position:fixed;top:0;right:0;height:100vh;width:var(--mapw);background:var(--card);
+    border-left:1px solid var(--line);box-shadow:-8px 0 26px rgba(0,0,0,.10);transform:translateX(100%);
+    transition:transform .28s ease;z-index:50;display:flex;flex-direction:column}
+  body.mapopen #mapPanel{transform:none}
+  body.mapopen{padding-right:var(--mapw)}
+  body{transition:padding-right .28s ease}
+  .maphd{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line);
+    background:#fcfcfb;flex:none}
+  .maphd .t{font-size:13.5px;font-weight:600} .maphd .t b{color:var(--accent)}
+  .maphd .newtab{margin-left:auto;font-size:12px;color:var(--muted);text-decoration:none;
+    border:1px solid var(--line);border-radius:8px;padding:5px 10px}
+  .maphd .newtab:hover{color:var(--accent);border-color:var(--accent)}
+  .maphd .x{border:0;background:none;font-size:23px;line-height:1;cursor:pointer;color:#8a8f8c;padding:0 4px}
+  .maphd .x:hover{color:var(--ink)}
+  #mapFrame{flex:1;width:100%;border:0;background:#eef0ee}
+  @media(max-width:900px){
+    body.mapopen{padding-right:0}
+    #mapPanel{top:auto;bottom:0;left:0;right:0;width:auto;height:86vh;transform:translateY(100%);
+      border-left:0;border-top:1px solid var(--line);box-shadow:0 -8px 26px rgba(0,0,0,.16);border-radius:14px 14px 0 0}
+    body.mapopen #mapPanel{transform:none}
+  }
 </style>
 <script src="config.js" onerror="window.SUPABASE_URL=window.SUPABASE_URL||''"></script>
 <script src="fg_analytics.js"></script>
@@ -74,6 +98,15 @@
   </header>
   <div id="view"><p class="intro" style="margin-top:24px">불러오는 중…</p></div>
 </div>
+
+<aside id="mapPanel" aria-hidden="true">
+  <div class="maphd">
+    <span class="t">발견공백 <b>지도</b></span>
+    <a class="newtab" id="mapNewTab" href="#" target="_blank" rel="noopener">새 탭 ↗</a>
+    <button class="x" id="mapClose" aria-label="지도 닫기" title="닫기">&times;</button>
+  </div>
+  <iframe id="mapFrame" title="발견공백 지도" loading="lazy"></iframe>
+</aside>
 
 <script type="module">
 import { sb, configured, onAuth, sendMagicLink, signInWithGoogle, signOut } from './fg_supabase.js';
@@ -106,6 +139,29 @@ function mapHref(m){
   }
   return 'service.html?' + p.toString();
 }
+
+// 지도 패널(우측 드로어/모바일 하단시트) — 답변의 '지도에서 보기' → 새 탭 대신 대화 옆에 인라인 표출
+const mapPanel = document.getElementById('mapPanel');
+const mapFrame = document.getElementById('mapFrame');
+const mapNewTab = document.getElementById('mapNewTab');
+let mapBtnActive = null;                                 // 현재 열려있는 지도를 띄운 버튼(하이라이트 토글)
+function openMap(href, btn){
+  if(!href) return;
+  if(mapFrame.getAttribute('src') !== href) mapFrame.setAttribute('src', href);   // 같은 링크면 재로딩 생략
+  mapNewTab.href = href;
+  document.body.classList.add('mapopen');
+  mapPanel.setAttribute('aria-hidden','false');
+  if(mapBtnActive && mapBtnActive!==btn) mapBtnActive.classList.remove('on');
+  if(btn){ btn.classList.add('on'); mapBtnActive = btn; }
+  window.fgTrack && window.fgTrack('chat_map_open');
+}
+function closeMap(){
+  document.body.classList.remove('mapopen');
+  mapPanel.setAttribute('aria-hidden','true');
+  if(mapBtnActive){ mapBtnActive.classList.remove('on'); mapBtnActive = null; }
+}
+document.getElementById('mapClose').onclick = closeMap;
+document.addEventListener('keydown', e => { if(e.key==='Escape' && document.body.classList.contains('mapopen')) closeMap(); });
 
 if (!configured) {
   view.innerHTML = '<div class="authcard"><h3>안내</h3><p>로그인 기능이 설정되지 않아 대화형 도우미를 이용할 수 없습니다.</p></div>';
@@ -152,7 +208,7 @@ function chatView(user){
     <span class="rem" id="rem"></span>
   </div>
   <div class="chatbox" id="box">
-    <div class="intro">안녕하세요. 지역·분류군·멸종위기 기준으로 <b>아직 발견되지 않은 종(발견공백)</b>을 찾아 드립니다. 아래 예시를 눌러 보거나 직접 질문해 보세요. 지역·종 질문에는 답변에서 <b>지도</b>로 바로 이어집니다.</div>
+    <div class="intro">안녕하세요. 지역·분류군·멸종위기 기준으로 <b>아직 발견되지 않은 종(발견공백)</b>을 찾아 드립니다. 아래 예시를 눌러 보거나 직접 질문해 보세요. 지역·종 질문에는 답변 옆에 <b>지도</b>가 바로 열려 대화를 이어가며 볼 수 있습니다.</div>
   </div>
   <div class="chips" id="chips">${EXAMPLES.map(e => `<button class="chip">${esc(e)}</button>`).join('')}</div>
   <div class="inrow">
@@ -199,8 +255,10 @@ function chatView(user){
       } else {
         const tools = (out.used_tools && out.used_tools.length) ? `<span class="tools">조회: ${esc([...new Set(out.used_tools)].join(', '))}</span>` : '';
         const href = mapHref(out.map);
-        const maplink = href ? `<a class="maplink" href="${esc(href)}" target="_blank" rel="noopener">지도에서 보기 →</a>` : '';
-        bubble('bot', esc(out.reply || '') + tools + maplink);
+        const maplink = href ? `<button class="maplink" data-href="${esc(href)}">지도에서 보기 →</button>` : '';
+        const node = bubble('bot', esc(out.reply || '') + tools + maplink);
+        const mb = node && node.querySelector('.maplink');
+        if(mb) mb.onclick = () => openMap(mb.dataset.href, mb);
         msgs.push({ role: 'assistant', content: out.reply || '' });
         if (typeof out.remaining === 'number' && rem) rem.textContent = `오늘 남은 질문 ${out.remaining}회`;
       }

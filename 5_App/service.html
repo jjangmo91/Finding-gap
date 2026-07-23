@@ -45,7 +45,7 @@
   .mapmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
     padding:20px;color:#777;font-size:13px;pointer-events:none}
   .legend{display:flex;align-items:center;gap:8px;font-size:11px;color:#666;margin-top:8px}
-  .ramp{height:10px;width:120px;border-radius:3px;background:linear-gradient(90deg,#E0EEE8,#216F5E)}
+  .ramp{height:10px;width:120px;border-radius:3px;background:linear-gradient(90deg,#1a9850,#fee08b,#d73027)}
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
     display:flex;flex-direction:column;max-height:560px}
   @media(max-width:880px){.panel{max-height:none}}
@@ -654,11 +654,18 @@ function renderSpView(){                                  // 우측 표 + 지도
 }
 
 /* ═══════ 공유 지도(모드 A·B 재사용, setTarget 전환) ═══════ */
-function colorFor(v){
-  const t=DOM.max<=DOM.min?0:(v-DOM.min)/(DOM.max-DOM.min);
-  const L=(a,b)=>Math.round(a+(b-a)*t);
-  return `rgba(${L(224,33)},${L(238,111)},${L(232,94)},0.82)`;
+/* 발견공백 다색 램프: 초록(잘 조사됨)→노랑→빨강(주목). 방향은 metric 따라 반전 —
+   공백(gap) 클수록·발견(found) 적을수록 빨강. 단색 대비 값 구간 시인성↑. */
+const RYG=[[26,152,80],[254,224,139],[215,48,39]];     // green·yellow·red (RdYlGn 계열)
+function ryg(s,a){                                      // s:0 초록 → .5 노랑 → 1 빨강
+  s=s<0?0:s>1?1:s; const i=s<0.5?0:1, u=s<0.5?s/0.5:(s-0.5)/0.5, c=RYG[i], d=RYG[i+1], L=(x,y)=>Math.round(x+(y-x)*u);
+  return `rgba(${L(c[0],d[0])},${L(c[1],d[1])},${L(c[2],d[2])},${a})`;
 }
+function rygScale(v){                                   // 값 v(현 metric)→램프 위치 s(발견은 반전)
+  const t=DOM.max<=DOM.min?0:(v-DOM.min)/(DOM.max-DOM.min);
+  return metric==='found'?1-t:t;
+}
+function colorFor(v){ return ryg(rygScale(v),0.82); }
 function regLabel(txt){
   return new ol.style.Text({text:txt,font:'11px system-ui,sans-serif',
     fill:new ol.style.Fill({color:'#1b201d'}),stroke:new ol.style.Stroke({color:'#ffffff',width:2.4})});
@@ -850,7 +857,11 @@ function recompute(){
   const vals=[...METRIC.values()]; DOM={min:Math.min(0,...vals), max:Math.max(1,...vals)};
   legLo.textContent=nf(DOM.min); legHi.textContent=nf(DOM.max);
   const lvl=regLevel==='sido'?'시도별':'시군구별';
-  legCap.textContent= metric==='found'?`${lvl} 발견 종수(짙을수록 많음)`:`${lvl} 미발견 종수(짙을수록 많음=공백 큼)`;
+  const rampEl=document.querySelector('.ramp');          // 램프 방향도 metric 따라 반전(좌=legLo·우=legHi 값 색과 일치)
+  if(rampEl) rampEl.style.background = metric==='found'
+    ? `linear-gradient(90deg,${ryg(1,1)},${ryg(.5,1)},${ryg(0,1)})`   // 발견: 적음(빨강)→많음(초록)
+    : `linear-gradient(90deg,${ryg(0,1)},${ryg(.5,1)},${ryg(1,1)})`;  // 공백: 작음(초록)→큼(빨강)
+  legCap.textContent= metric==='found'?`${lvl} 발견 종수 — 초록 많음·빨강 적음`:`${lvl} 미발견(공백) — 빨강 큼·초록 작음`;
 }
 function renderSelChips(){
   if(!selSidos.size){ selChips.innerHTML=`<span class="muted">지도에서 ${regLevel==='sido'?'시도':'시군구'}를 클릭(폴리곤 밖 클릭=전체)</span>`; return; }
