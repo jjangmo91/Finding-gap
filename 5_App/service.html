@@ -358,7 +358,7 @@
     <div class="split">
       <div>
         <div id="mapB"><div class="mapmsg" id="mapMsgB">종을 검색·선택하면 발견 지역(시도)이 지도에 표시됩니다.</div></div>
-        <div class="legend"><span class="dot" style="background:#2f6f5e"></span><span>선택 종 발견 시도</span>
+        <div class="legend"><span>기록</span><span>적음</span><span class="ramp" style="background:linear-gradient(90deg,#d73027,#fee08b,#1a9850)"></span><span>많음</span>
           <span class="dot" style="background:#cfd3cf;margin-left:10px"></span><span>미발견(공백)</span>
           <span style="margin-left:8px" id="legCapB" class="muted"></span></div>
       </div>
@@ -706,8 +706,8 @@ function styleFn(feature){
     const c=selRegions.get(code)||0, has=c>0;
     const t=selRegMax>0?Math.min(1,c/selRegMax):0;
     return new ol.style.Style({
-      fill:new ol.style.Fill({color:has?`rgba(47,111,94,${(0.35+0.5*t).toFixed(2)})`:'rgba(206,211,206,0.30)'}),
-      stroke:new ol.style.Stroke({color:has?'#2f6f5e':'#9aa39c', width:has?1.2:0.6}),   // 기본 경계=회색 얇게·발견만 accent
+      fill:new ol.style.Fill({color:has?ryg(1-t,0.82):'rgba(206,211,206,0.30)'}),   // 모드 A와 동일 팔레트: 기록 많음(t=1)=초록·적음=빨강
+      stroke:new ol.style.Stroke({color:has?'#7a837c':'#9aa39c', width:has?1:0.6}),   // 발견 지역만 약간 진한 회색 윤곽(색은 채움이 전달)
       text:txt});
   }
   const v=METRIC.get(code)||0, sel=selSidos.has(code);  // 모드 A choropleth
@@ -936,7 +936,7 @@ function recompute(){
   const vals=[...METRIC.values()]; DOM={min:Math.min(0,...vals), max:Math.max(1,...vals)};
   legLo.textContent=nf(DOM.min); legHi.textContent=nf(DOM.max);
   const lvl=regLevel==='sido'?'시도별':'시군구별';
-  const rampEl=document.querySelector('.ramp');          // 램프 방향도 metric 따라 반전(좌=legLo·우=legHi 값 색과 일치)
+  const rampEl=document.querySelector('#modeA .ramp');   // 램프 방향도 metric 따라 반전(좌=legLo·우=legHi 값 색과 일치). mode B 램프와 분리
   if(rampEl) rampEl.style.background = metric==='found'
     ? `linear-gradient(90deg,${ryg(1,1)},${ryg(.5,1)},${ryg(0,1)})`   // 발견: 적음(빨강)→많음(초록)
     : `linear-gradient(90deg,${ryg(0,1)},${ryg(.5,1)},${ryg(1,1)})`;  // 공백: 작음(초록)→큼(빨강)
