@@ -190,16 +190,49 @@ async function listSpeciesByTaxon(a: Record<string, unknown>) {
   const nameRaw = String(a.name ?? "").trim();
   if (!nameRaw) return { error: "분류명(강/목/과/속)이 필요합니다." };
 
-  // 한글 분류명 → 라틴명 해석: fg_taxon_name 에 강·목·과·속 전체 KTSN 매핑 보유(라틴명 입력이면 그대로 통과).
-  const ko = (await sql`select latin from fg_taxon_name where rank = ${rank} and korean = ${nameRaw} limit 1`)[0];
-  const latin = ko?.latin ?? nameRaw;
-
   const code = String(a.region ?? "").trim();
   if (code && code.length !== 2 && code.length !== 5) return { error: "region 은 시도(2자리) 또는 시군구(5자리) 코드여야 합니다." };
   const rcol = code ? regionField(code) : "sido";
   const state = String(a.state ?? "").trim().toLowerCase();
   const limit = Math.max(1, Math.min(Number(a.limit ?? 30), 100));
 
+  // 분류군명 해석 — 쿼리에는 반드시 검증된 라틴명만 사용(사전/실데이터에 없는 raw 입력은 조회에 쓰지 않음).
+  let latin: string | undefined;      // 실제 종 조회에 쓸 검증된 라틴명
+  let matched: string | undefined;    // 사용자에게 보일 해석된 분류군(한글 우선)
+  let approximate = false;
+  // 1) 한글 정확 일치(사전 fg_taxon_name)
+  const exact = (await sql`select latin, korean from fg_taxon_name where rank = ${rank} and korean = ${nameRaw} limit 1`)[0];
+  if (exact) { latin = exact.latin as string; matched = exact.korean as string; }
+  // 2) 라틴명 직접 입력이 실제 서비스 분류군에 존재하면 인정(정규 대소문자로 회수)
+  if (!latin) {
+    const asLatin = (await sql`select ${sql(col)} as v from fg_species where lower(${sql(col)}) = lower(${nameRaw}) limit 1`)[0];
+    if (asLatin) { latin = asLatin.v as string; matched = latin; }
+  }
+  // 3) 그래도 없으면 사전에서 가장 비슷한 같은 계층 항목으로 근사 해석(pg_trgm)
+  if (!latin) {
+    const near = (await sql`select latin, korean from fg_taxon_name
+      where rank = ${rank} and korean % ${nameRaw}
+      order by similarity(korean, ${nameRaw}) desc limit 1`)[0];
+    if (near) { latin = near.latin as string; matched = near.korean as string; approximate = true; }
+  }
+  // 4) 사전/실데이터 어디에도 없음 → 쿼리하지 않고 후보만 제시
+  if (!latin) {
+    let cand = await sql`select rank, latin, korean from fg_taxon_name
+      where korean like ${"%" + nameRaw + "%"} order by length(korean) limit 8`;
+    if (!cand.length) {
+      cand = await sql`select rank, latin, korean from fg_taxon_name
+        where korean % ${nameRaw} order by similarity(korean, ${nameRaw}) desc limit 8`;
+    }
+    return {
+      error: `'${nameRaw}'(${TAXON_RANK_KOR[rank]})에 해당하는 분류군을 사전에서 찾지 못했습니다.`,
+      suggestions: cand.length ? cand : undefined,
+      hint: cand.length
+        ? "아래 후보(rank·korean) 중 하나로 rank 를 맞춰 다시 호출하세요."
+        : "라틴 학명으로 시도해 보세요(예: family=Lucanidae, order=Coleoptera).",
+    };
+  }
+
+  // 검증된 latin 으로만 종 조회.
   const rows = await sql`
     select s.ktsn, s.korean_name, s.scientific_name,
            s.class_la, s.order_la, s.family_la, s.genus_la,
@@ -212,23 +245,6 @@ async function listSpeciesByTaxon(a: Record<string, unknown>) {
     where lower(s.${sql(col)}) = lower(${latin})
     order by s.korean_name
     limit ${limit}`;
-  if (!rows.length) {
-    // 정확 일치 실패 → 유사 한글명 후보 제시(계층 무관, '나비'·'고래' 통칭 완화).
-    // 1차 부분일치, 없으면 pg_trgm 유사도(딱따구리↔딱다구리 등 철자변형·오타).
-    let cand = await sql`select rank, latin, korean from fg_taxon_name
-      where korean like ${"%" + nameRaw + "%"} order by length(korean) limit 8`;
-    if (!cand.length) {
-      cand = await sql`select rank, latin, korean from fg_taxon_name
-        where korean % ${nameRaw} order by similarity(korean, ${nameRaw}) desc limit 8`;
-    }
-    return {
-      error: `'${nameRaw}'(${TAXON_RANK_KOR[rank]})에 정확히 일치하는 분류군이 없습니다.`,
-      suggestions: cand.length ? cand : undefined,
-      hint: cand.length
-        ? "아래 후보(rank·korean) 중 하나로 rank 를 맞춰 다시 물어보세요."
-        : "라틴 학명으로 시도해 보세요(예: family=Lucanidae, order=Coleoptera).",
-    };
-  }
   const withState = rows.map((r) => {
     const my = r.my as number | null;
     const st = !my ? "undiscovered" : my >= CUTOFF ? "found" : "dormant";
@@ -236,7 +252,11 @@ async function listSpeciesByTaxon(a: Record<string, unknown>) {
     return { ...rest, state: st };
   });
   const filtered = state ? withState.filter((r) => r.state === state) : withState;
-  return { rank, name: nameRaw, latin, region: code || null, count: filtered.length, species: filtered };
+  return {
+    rank, name: nameRaw, matched_taxon: matched ?? latin, latin, approximate,
+    region: code || null, count: filtered.length, species: filtered,
+    ...(approximate ? { note: `'${nameRaw}'와 정확히 일치하는 분류군이 없어 가장 비슷한 '${matched}'(으)로 안내합니다.` } : {}),
+  };
 }
 
 async function taxaSummary() {
@@ -364,7 +384,7 @@ const SYSTEM = `당신은 '발견공백 도우미'입니다. 한국의 생물종
 - 멸종위기·적색목록 종 목록 → list_protected_species (region+state 로 지역별 상태 필터).
 - 특정 종의 전국 발견 상태 → search_species 로 ktsn 을 찾고 species_detail.
 - 전국 분류군별 요약 → taxa_summary (특정 지역 질문에는 쓰지 마세요).
-- 특정 강·목·과·속(예: 사슴벌레과, 하늘소과, 진달래속, 딱정벌레목, 포유강)에 속한 종 목록·미발견 종 → list_species_by_taxon (rank=class|order|family|genus). 강·목·과·속 모두 한글명을 그대로 넘기면 됩니다(라틴 학명도 가능). 정확히 못 찾으면 도구가 suggestions(후보)를 주니 그 후보의 rank·이름으로 다시 호출하세요. taxon_group(9개 대분류: 곤충류 등)과는 다른 개념이니 혼동하지 마세요. KTSN 분류체계는 강-목-과-속-종/아종까지만 있고 아과·족은 지원하지 않습니다 — 물어보면 그렇게 안내하세요.
+- 특정 강·목·과·속(예: 사슴벌레과, 하늘소과, 진달래속, 딱정벌레목, 포유강)에 속한 종 목록·미발견 종 → list_species_by_taxon (rank=class|order|family|genus). 강·목·과·속 모두 한글명을 그대로 넘기면 됩니다(라틴 학명도 가능). 결과에 approximate=true 이면 정확히 일치하는 분류군이 없어 가장 비슷한 matched_taxon 으로 해석한 것이니, 답변에 "'입력'과 가장 비슷한 'matched_taxon'로 안내"임을 밝히세요. 사전에 없어 suggestions(후보)만 오면 그 후보의 rank·이름으로 다시 호출하세요. taxon_group(9개 대분류: 곤충류 등)과는 다른 개념이니 혼동하지 마세요. KTSN 분류체계는 강-목-과-속-종/아종까지만 있고 아과·족은 지원하지 않습니다 — 물어보면 그렇게 안내하세요.
 - 어느 과·속에 발견공백이 많은지, 또는 (최근10년) 전혀 기록되지 않은 과·속 순위 → taxon_gap_ranking (rank=family|genus, taxon_group·region 선택, only_zero_found=true 면 완전 미발견 분류군만). 예: '곤충류에서 미발견 많은 과', '전남에서 기록 없는 과'. 개별 종 나열이 아니라 분류군 단위 순위가 필요할 때 씁니다.
 - taxon_group 인자에는 코드를 넘기세요: IN=곤충류, IV=무척추동물(곤충제외), VP=관속식물, -P=어류, MS=선태류, AV=조류, MM=포유류, RP=파충류, AM=양서류.`;
 
