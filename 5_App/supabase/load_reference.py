@@ -126,11 +126,11 @@ def main():
 
         load_table(sqlite_conn, pg_cursor, 'fg_species',
                    ['ktsn', 'korean_name', 'scientific_name', 'taxon_group',
-                    'taxon_group_kor', 'family_la', 'genus_la',
+                    'taxon_group_kor', 'class_la', 'order_la', 'family_la', 'genus_la',
                     'endangered_grade', 'national_redlist_category',
                     'has_media', 'interest'],
                    "SELECT ktsn, korean_name, scientific_name, taxon_group, "
-                   "taxon_group_kor, family_la, genus_la, "
+                   "taxon_group_kor, class_la, order_la, family_la, genus_la, "
                    "endangered_grade, national_redlist_category, "
                    "has_media, interest FROM species")
 
