@@ -125,6 +125,14 @@
   .reg-toggle button.on{background:var(--accent);color:#fff}
   .reg-toggle button+button{border-left:1px solid #e3e8e5}
   .reg-toggle button.poly{min-width:44px;text-align:center;letter-spacing:.3px}
+  /* 내 주변(geolocation → 시군구 발견공백) */
+  .nearbybtn{appearance:none;border:1px solid #cdd5d1;background:#fff;border-radius:8px;padding:8px 12px;
+    font:600 12.5px system-ui,sans-serif;color:#3a4a43;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+  .nearbybtn:hover{border-color:var(--accent);color:var(--accent)}
+  .nearbybtn:disabled{opacity:.6;cursor:default}
+  .nearby-msg{font-size:11px;line-height:1.4;color:#a03027}
+  .nearby-msg:empty{display:none}
+  .nearby-msg.ok{color:var(--muted)}
   .regtbl-wrap{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px}
   .regtbl{width:100%;border-collapse:collapse;font-size:13px}
   .regtbl thead th{position:sticky;top:0;background:#f4f6f4;text-align:left;padding:6px 10px;font-weight:600;color:#3b463f;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -273,6 +281,7 @@
 
     /* 관심종·CSV 버튼 터치 타깃 */
     .watchbtn{min-height:44px}
+    .nearbybtn{min-height:44px}
     .panel h2 .dl{min-height:44px;display:inline-flex;align-items:center}
   }
   /* 가로(landscape)·낮은 뷰포트: 지도 높이 축소로 이중 스크롤 완화 */
@@ -301,6 +310,10 @@
       <div class="field"><label>종료 연도</label><select id="fY1"></select></div>
       <div class="field"><label>발견/미발견</label>
         <div class="seg"><button id="mFound" class="on" onclick="setMetric('found')">발견 종</button><button id="mGap" onclick="setMetric('gap')">미발견 종</button></div>
+      </div>
+      <div class="field"><label>내 위치</label>
+        <button type="button" id="nearbyBtn" class="nearbybtn" title="현재 위치의 시군구 발견공백 보기">📍 내 주변</button>
+        <span class="nearby-msg" id="nearbyMsg"></span>
       </div>
       <div class="field" style="flex:1"><label>선택 지역</label>
         <div class="selchips" id="selChips"><span class="muted">지도에서 시도를 클릭(폴리곤 밖 클릭=전체)</span></div>
@@ -787,6 +800,33 @@ function setRegLevel(l){
   else if(selSpecies){ selRegions=speciesRegions(selSpecies,sy0,sy1); refreshSpeciesMap(); }
   sidoLayer.changed();
 }
+/* 내 주변: 현재 위치(geolocation) → 포함 시군구 폴리곤 판정 → 해당 시군구 미발견(공백) 표출.
+   위치는 클라이언트에서만 사용(전송·저장 없음), 기존 시군구 레벨/선택/확대 기계 재사용. */
+function nearbyMsg(t,ok){ const el=document.getElementById('nearbyMsg'); if(el){ el.textContent=t||''; el.className='nearby-msg'+(ok?' ok':''); } }
+function locateNearby(){
+  const btn=document.getElementById('nearbyBtn');
+  if(!('geolocation' in navigator)){ nearbyMsg('이 브라우저는 위치를 지원하지 않습니다.'); return; }
+  if(!LAYERS.sigungu || !LAYERS.sigungu.getSource().getFeatures().length){ nearbyMsg('지도를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'); return; }
+  if(btn) btn.disabled=true; nearbyMsg('위치 확인 중…', true);
+  navigator.geolocation.getCurrentPosition(pos=>{
+    if(btn) btn.disabled=false;
+    const coord=ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+    const hit=LAYERS.sigungu.getSource().getFeatures().find(f=>{ const g=f.getGeometry(); return g && g.intersectsCoordinate(coord); });
+    if(!hit){ nearbyMsg('현재 위치가 국내 시군구 경계 밖입니다.'); return; }
+    const code=hit.get('code');
+    if(mapMode!=='A') setMode('A');
+    setRegLevel('sigungu');                                 // 시군구 레벨(이미면 no-op)
+    selSidos.clear(); selSidos.add(code);
+    metric='gap'; mFound.classList.remove('on'); mGap.classList.add('on');   // 내 주변은 발견공백(미발견) 중심
+    recompute(); renderSelChips(); renderTable(); if(sidoLayer) sidoLayer.changed();
+    map.getView().fit(hit.getGeometry().getExtent(), {padding:[40,40,40,40], maxZoom:10});
+    nearbyMsg(rname(code)+' 발견공백', true);
+    window.fgTrack && fgTrack('nearby_locate');
+  }, err=>{
+    if(btn) btn.disabled=false;
+    nearbyMsg(err && err.code===1 ? '위치 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요.' : '위치를 가져오지 못했습니다.');
+  }, {enableHighAccuracy:false, timeout:8000, maximumAge:60000});
+}
 function initEnvLayers(layers){                           // ImageStatic 오버레이(EPSG:3857) — 변수당 1장, 기본 숨김
   if(!ENVMETA||!ENVMETA.layers) return;
   for(const v of ENVMETA.vars){
@@ -1186,6 +1226,7 @@ function boot(){
   fY0.onchange=()=>{ y0=+fY0.value; if(y1<y0){y1=y0;fY1.value=y1;} recompute(); if(sidoLayer)sidoLayer.changed(); renderTable(); };
   fY1.onchange=()=>{ y1=+fY1.value; if(y1<y0){y0=y1;fY0.value=y0;} recompute(); if(sidoLayer)sidoLayer.changed(); renderTable(); };
   dlCsv.onclick=downloadCSV;
+  { const nb=document.getElementById('nearbyBtn'); if(nb) nb.onclick=locateNearby; }
   // 모드 B 컨트롤
   fillSearchTaxon(); fillSearchYears();
   sTaxon.onchange=()=>{ sTax=sTaxon.value; sy0=null;sy1=null; fillSearchYears();
